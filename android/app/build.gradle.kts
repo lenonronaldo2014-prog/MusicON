@@ -42,6 +42,8 @@ android {
 }
 
 dependencies {
+    implementation("com.spotify.android:auth:5.0.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 }

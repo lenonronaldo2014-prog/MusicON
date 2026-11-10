@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../sources/media_source.dart';
+import 'android_spotify_client.dart';
 
 abstract class SpotifySessionStore {
   Future<String?> read();
@@ -47,7 +48,9 @@ class SpotifyService extends ChangeNotifier {
     http.Client? client,
     this.store = const SecureSpotifyStore(),
     Future<void> Function(Uri)? openBrowser,
-  }) : _client = client ?? http.Client(),
+  }) : _client =
+           client ??
+           (Platform.isAndroid ? AndroidSpotifyClient() : http.Client()),
        _openBrowser =
            openBrowser ??
            ((uri) => const MethodChannel(
@@ -62,8 +65,28 @@ class SpotifyService extends ChangeNotifier {
   Future<void>? _refreshing;
   VoidCallback? _cancelLogin;
   int _epoch = 0;
-  void cancelConnect() => _cancelLogin?.call();
+  void cancelConnect() {
+    _epoch++;
+    _cancelLogin?.call();
+  }
+
   bool _disposed = false;
+  bool _appConnecting = false;
+  static const nativeRedirect = 'musicon://spotify/callback';
+  Future<bool> spotifyAppAvailable() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await const MethodChannel(
+            'musicon/app',
+          ).invokeMethod<bool>('spotifyAppAvailable') ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   bool get configured => RegExp(r'^[a-fA-F0-9]{32}$').hasMatch(clientId);
   bool get connected => _session != null;
   void _changed() {
@@ -98,15 +121,16 @@ class SpotifyService extends ChangeNotifier {
     _changed();
   }
 
-  Future<void> connect() async {
+  Future<void> connect({bool useSpotifyApp = false}) async {
     if (!configured) {
       throw const SourceException(
         'A conexão Spotify ainda precisa ser ativada para o MusicON.',
       );
     }
-    if (_server != null) {
+    if (_server != null || _appConnecting) {
       throw const SourceException('Uma conexão já está em andamento.');
     }
+    if (useSpotifyApp) return _connectWithApp();
     final epoch = ++_epoch;
     final verifier = _random(), state = _random();
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8888);
@@ -125,7 +149,11 @@ class SpotifyService extends ChangeNotifier {
       final code = request.uri.queryParameters['code'];
       request.response.headers.contentType = ContentType.html;
       request.response.write(
-        '<!doctype html><html lang="pt"><meta charset="utf-8"><title>MusicON</title><p>Volte ao MusicON para continuar.</p></html>',
+        '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Voltar ao MusicON</title>'
+        '<body style="background:#0e0c13;color:#eee;font:18px sans-serif;padding:32px"><h1>Continue no MusicON</h1>'
+        '<p>Recebemos o retorno do Spotify. O aplicativo vai concluir a conexão.</p>'
+        '<a style="display:inline-block;background:#b99aff;color:#261b40;padding:18px;border-radius:24px;text-decoration:none" href="intent://spotify/return#Intent;scheme=musicon;package=com.musicon.musicon.prototype;end">Abrir MusicON</a>'
+        '<p>Se o aplicativo não abrir automaticamente, toque no botão acima.</p></body></html>',
       );
       await request.response.close();
       if (completed.isCompleted) return;
@@ -167,25 +195,149 @@ class SpotifyService extends ChangeNotifier {
         }),
       );
       final code = await codeResult;
-      final response = await _client
-          .post(
-            Uri.https('accounts.spotify.com', '/api/token'),
-            body: {
-              'grant_type': 'authorization_code',
-              'code': code,
-              'redirect_uri': redirect,
-              'client_id': clientId,
-              'code_verifier': verifier,
-            },
-          )
-          .timeout(const Duration(seconds: 25));
-      await _acceptToken(response, epoch);
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel(
+            'musicon/app',
+          ).invokeMethod<void>('spotifyReturn');
+        } on PlatformException {
+          // The browser page also offers an explicit return button.
+        } on MissingPluginException {
+          // Non-Android test hosts do not have this method.
+        }
+      }
+      await _exchangeCode(code, redirect, verifier, epoch);
     } finally {
       timer.cancel();
       _cancelLogin = null;
       await subscription.cancel();
       await server.close(force: true);
       if (identical(_server, server)) _server = null;
+    }
+  }
+
+  Future<void> _connectWithApp() async {
+    _appConnecting = true;
+    final epoch = ++_epoch;
+    final verifier = _random(), state = _random();
+    const channel = MethodChannel('musicon/app');
+    _cancelLogin = () {
+      unawaited(
+        channel
+            .invokeMethod<void>('spotifyAppCancel')
+            .catchError((Object _) {}),
+      );
+    };
+    try {
+      final response = await channel
+          .invokeMapMethod<String, dynamic>('spotifyAppAuthorize', {
+            'clientId': clientId,
+            'state': state,
+            'verifier': verifier,
+            'challenge': challenge(verifier),
+          })
+          .timeout(const Duration(minutes: 3));
+      if (response == null ||
+          response['state'] != state ||
+          response['code'] is! String) {
+        throw const SourceException(
+          'O retorno do Spotify é inválido. Tente conectar novamente.',
+        );
+      }
+      await _exchangeCode(
+        response['code'] as String,
+        nativeRedirect,
+        verifier,
+        epoch,
+      );
+    } on PlatformException catch (error) {
+      throw SourceException(
+        error.code == 'cancelled'
+            ? 'A conexão com o Spotify foi cancelada.'
+            : 'Não foi possível conectar pelo aplicativo Spotify. Confira se ele está atualizado ou use a opção Pelo navegador.',
+      );
+    } on TimeoutException {
+      throw const SourceException('O login demorou demais. Tente novamente.');
+    } on MissingPluginException {
+      throw const SourceException(
+        'Use Pelo navegador para conectar neste aparelho.',
+      );
+    } finally {
+      _cancelLogin = null;
+      _appConnecting = false;
+      try {
+        await channel.invokeMethod<void>('spotifyAppCancel');
+      } on PlatformException {
+        /* Already closed. */
+      } on MissingPluginException {
+        /* Non-Android host. */
+      }
+    }
+  }
+
+  Future<void> _exchangeCode(
+    String code,
+    String redirect,
+    String verifier,
+    int epoch,
+  ) async {
+    if (_disposed || epoch != _epoch) {
+      throw const SourceException('Conexão cancelada.');
+    }
+    final response = await _request(
+      () => _client.post(
+        Uri.https('accounts.spotify.com', '/api/token'),
+        body: {
+          'grant_type': 'authorization_code',
+          'code': code,
+          'redirect_uri': redirect,
+          'client_id': clientId,
+          'code_verifier': verifier,
+        },
+      ),
+    );
+    await _acceptToken(response, epoch);
+  }
+
+  Future<http.Response> _request(Future<http.Response> Function() send) async {
+    final epoch = _epoch;
+    for (var attempt = 0; ; attempt++) {
+      if (_disposed || epoch != _epoch) {
+        throw const SourceException('Conexão cancelada.');
+      }
+      try {
+        return await send().timeout(const Duration(seconds: 25));
+      } on TimeoutException {
+        // A token request may have reached Spotify. Do not replay it blindly.
+        throw const SourceException(
+          'O Spotify demorou para responder. Confira sua conexão e tente novamente.',
+        );
+      } on HandshakeException {
+        throw const SourceException(
+          'Não foi possível estabelecer uma conexão segura com o Spotify. Confira a data e a hora do celular ou tente outra rede.',
+        );
+      } catch (error) {
+        if (error is! SocketException && error is! http.ClientException) {
+          rethrow;
+        }
+        final message = error is SocketException
+            ? error.message
+            : (error as http.ClientException).message;
+        final dnsFailure = message.toLowerCase().contains('failed host lookup');
+        // DNS lookup failed before sending the code/token. Retrying is safe;
+        // timeouts, dropped connections and HTTP responses are not retried here.
+        if (dnsFailure && attempt < 2) {
+          await Future<void>.delayed(
+            Duration(milliseconds: 600 * (attempt + 1)),
+          );
+          continue;
+        }
+        throw SourceException(
+          dnsFailure
+              ? 'Não foi possível localizar o servidor do Spotify na sua rede. Tente trocar entre Wi-Fi e dados móveis. Se usa VPN, bloqueador ou DNS privado personalizado, teste sem ele e tente conectar novamente.'
+              : 'Não foi possível acessar o Spotify. Confira sua conexão com a internet ou tente outra rede e tente novamente.',
+        );
+      }
     }
   }
 
@@ -230,16 +382,16 @@ class SpotifyService extends ChangeNotifier {
     if (refresh == null) {
       throw const SourceException('Conecte sua conta Spotify primeiro.');
     }
-    final response = await _client
-        .post(
-          Uri.https('accounts.spotify.com', '/api/token'),
-          body: {
-            'grant_type': 'refresh_token',
-            'refresh_token': refresh,
-            'client_id': clientId,
-          },
-        )
-        .timeout(const Duration(seconds: 25));
+    final response = await _request(
+      () => _client.post(
+        Uri.https('accounts.spotify.com', '/api/token'),
+        body: {
+          'grant_type': 'refresh_token',
+          'refresh_token': refresh,
+          'client_id': clientId,
+        },
+      ),
+    );
     if (response.statusCode == 400 || response.statusCode == 401) {
       await disconnect();
     }
@@ -260,12 +412,12 @@ class SpotifyService extends ChangeNotifier {
         DateTime.now().millisecondsSinceEpoch + 30000) {
       await _refresh();
     }
-    final response = await _client
-        .get(
-          uri,
-          headers: {'Authorization': 'Bearer ${_session!['access_token']}'},
-        )
-        .timeout(const Duration(seconds: 25));
+    final response = await _request(
+      () => _client.get(
+        uri,
+        headers: {'Authorization': 'Bearer ${_session!['access_token']}'},
+      ),
+    );
     if (response.statusCode == 401 && retry) {
       await _refresh();
       return _get(uri, retry: false);

@@ -8,7 +8,13 @@ Player Android em Flutter com identidade própria, busca online, músicas do apa
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
-## Versão 0.7.0
+## Versão 0.7.1
+
+- Conexão HTTPS com Spotify pelo cliente nativo Android com OkHttp, sem usar os sockets do Dart.
+- Escolha entre login pelo aplicativo Spotify compatível instalado e pelo navegador. O login nativo usa Spotify Android Auth 5.0.0 com PKCE e precisa do cadastro Android descrito no guia.
+- Retorno do navegador tenta trazer o MusicON para a frente e oferece um botão Abrir MusicON como alternativa.
+- Falhas temporárias de DNS na conexão e nas consultas ao Spotify recebem até duas novas tentativas, com intervalo curto.
+- Falhas persistentes mostram orientação de rede em português e permitem tentar conectar novamente. A sessão já salva é preservada quando a rede falha; respostas HTTP e timeouts não são repetidos automaticamente.
 
 - Tela inicial original preservada e navegação Início / Buscar / Biblioteca.
 - Busca de músicas e artistas com NewPipeExtractor v0.27.0, até 20 resultados por consulta, sem login do YouTube.
@@ -71,7 +77,11 @@ Os APKs atuais usam a mesma chave local de desenvolvimento das entregas anterior
 
 ## Validação
 
-A análise estática passou sem problemas e os **44 testes automatizados** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação e integração Spotify. Os testes de API simulam as respostas externas; isso não substitui um login real.
+A análise estática passou sem problemas e os **52 testes automatizados** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação e integração Spotify. Os testes de API simulam as respostas externas; isso não substitui um login real.
+
+Na versão 0.7.1, o ensaio de rede Android alcançou os endpoints oficiais de token e playlists por HTTPS, recebendo 400/401 com credenciais de teste inválidas. O canal nativo rejeitou outro domínio. Um retorno de autorização simulado, aberto no Chrome do emulador, trouxe o MusicON para a frente. O emulador não possui Spotify instalado; o login nativo foi verificado com respostas simuladas e ainda precisa de teste em aparelho com Spotify e cadastro Android concluído.
+
+Bibliotecas adicionais: [Spotify Android Auth 5.0.0](https://github.com/spotify/android-auth) e [OkHttp 4.12.0](https://github.com/square/okhttp), ambas sob Apache 2.0, com licenças em `third_party/`.
 
 Ensaio offline 0.6.0 no emulador:
 

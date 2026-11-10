@@ -23,13 +23,58 @@ class _SpotifyPageState extends State<SpotifyPage> {
   List<SpotifyPlaylist> playlists = [];
   bool busy = false;
   String? error;
-  Future<void> _load({bool login = false}) async {
+  Future<void> _chooseLogin() async {
+    setState(() => busy = true);
+    final available = await widget.spotify.spotifyAppAvailable();
+    if (!mounted) return;
+    setState(() => busy = false);
+    final useApp = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Como deseja conectar?',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.phone_android),
+              title: const Text('Pelo aplicativo Spotify'),
+              subtitle: Text(
+                available
+                    ? 'Usar a conta conectada no Spotify'
+                    : 'Spotify compatível não encontrado neste celular',
+              ),
+              enabled: available,
+              onTap: available ? () => Navigator.pop(context, true) : null,
+            ),
+            ListTile(
+              leading: const Icon(Icons.open_in_browser),
+              title: const Text('Pelo navegador'),
+              subtitle: const Text('Entrar com sua conta no site do Spotify'),
+              onTap: () => Navigator.pop(context, false),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+    if (mounted && useApp != null) {
+      await _load(login: true, useSpotifyApp: useApp);
+    }
+  }
+
+  Future<void> _load({bool login = false, bool useSpotifyApp = false}) async {
     setState(() {
       busy = true;
       error = null;
     });
     try {
-      if (login) await widget.spotify.connect();
+      if (login) await widget.spotify.connect(useSpotifyApp: useSpotifyApp);
       final values = await widget.spotify.playlists();
       if (mounted) setState(() => playlists = values);
     } catch (e) {
@@ -130,10 +175,14 @@ class _SpotifyPageState extends State<SpotifyPage> {
                   FilledButton.icon(
                     onPressed: busy || !widget.spotify.configured
                         ? null
-                        : () => _load(login: true),
+                        : _chooseLogin,
                     icon: const Icon(Icons.login),
                     label: Text(
-                      busy ? 'Aguardando Spotify…' : 'Conectar ao Spotify',
+                      busy
+                          ? 'Aguardando Spotify…'
+                          : error != null
+                          ? 'Tentar conectar novamente'
+                          : 'Conectar ao Spotify',
                     ),
                   ),
                 if (busy && !widget.spotify.connected)
