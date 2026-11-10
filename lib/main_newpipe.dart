@@ -14,6 +14,10 @@ import 'library_store.dart';
 import 'ui.dart';
 import 'app_preferences.dart';
 import 'update_service.dart';
+import 'online_services.dart';
+import 'spotify/spotify_service.dart';
+import 'models.dart';
+import 'downloads/download_job.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,15 +37,24 @@ Future<void> main() async {
   await library.load();
   final preferences = AppPreferences();
   await preferences.load();
+  final spotify = SpotifyService();
+  await spotify.load();
+  final services = OnlineServices.create(library, source: source);
+  await services.downloads.load();
   runApp(
     MusicOnApp(
       library: library,
       engine: engine,
+      services: services,
+      spotify: spotify,
       discovery: controller,
       preferences: preferences,
       updates: UpdateService(),
     ),
   );
+  if (kDebugMode && const bool.fromEnvironment('NEWPIPE_OFFLINE_PROBE')) {
+    unawaited(runOfflineProbe(library, services, engine, source));
+  }
   if (kDebugMode && const bool.fromEnvironment('NEWPIPE_PROBE')) {
     unawaited(runProbe(controller));
   }
@@ -103,5 +116,81 @@ Future<void> runProbe(PrototypeController controller) async {
     report['error'] = e.toString();
     await record('failed');
     if (controller.engine.playing) await controller.engine.toggle();
+  }
+}
+
+// Opt-in integration probe. No account data or signed media addresses are logged.
+Future<void> runOfflineProbe(
+  LibraryController library,
+  OnlineServices services,
+  JustAudioEngine engine,
+  NewPipeSource source,
+) async {
+  final file = File(
+    '${(await getApplicationDocumentsDirectory()).path}/offline-probe.json',
+  );
+  final report = <String, Object?>{};
+  Future<void> record(String stage) async {
+    report['stage'] = stage;
+    await file.writeAsString(jsonEncode(report), flush: true);
+    debugPrint('MUSICON_OFFLINE_PROBE $stage');
+  }
+
+  try {
+    await record('preparing');
+    const store = SecureSpotifyStore();
+    if (await store.read() == null) {
+      try {
+        await store.write('musicon-probe');
+        report['secureStoreRoundtrip'] = await store.read() == 'musicon-probe';
+      } finally {
+        await store.clear();
+      }
+    }
+    final resolved = await source.resolve(
+      'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+    );
+    final stable = await library.addResolved(resolved);
+    final job = await services.downloads.enqueue(stable);
+    final deadline = DateTime.now().add(const Duration(minutes: 3));
+    while (job.status == DownloadStatus.downloading ||
+        job.status == DownloadStatus.queued) {
+      if (DateTime.now().isAfter(deadline)) {
+        throw StateError('Download timed out');
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    if (job.status != DownloadStatus.completed) {
+      throw StateError(job.message ?? job.label);
+    }
+    report['bytes'] = job.received;
+    await record('ready_for_disconnect');
+    await Future<void>.delayed(const Duration(seconds: 12));
+    final restored = LibraryController(PreferencesLibraryStore());
+    await restored.load();
+    final local = restored.findTrack(stable.id)!;
+    report['localAfterReload'] =
+        local.source == TrackSource.local &&
+        await File(local.location).exists();
+    if (report['localAfterReload'] != true) {
+      throw StateError('Local file not restored');
+    }
+    await engine.playQueue([local], 0);
+    final playbackDeadline = DateTime.now().add(const Duration(seconds: 30));
+    while (engine.position.inSeconds < 3) {
+      if (engine.error != null || DateTime.now().isAfter(playbackDeadline)) {
+        throw StateError(engine.error ?? 'Playback did not advance');
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    report['position'] = engine.position.inSeconds;
+    report['playing'] = engine.playing;
+    report['source'] = engine.current?.source.name;
+    await record('pass');
+    if (engine.playing) await engine.toggle();
+    restored.dispose();
+  } catch (e) {
+    report['error'] = e.toString();
+    await record('failed');
   }
 }

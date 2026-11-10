@@ -18,8 +18,17 @@ class DownloadController extends ChangeNotifier {
     required this.library,
     required this.directory,
     this.maxBytes = 256 * 1024 * 1024,
+    this.openTrack,
   });
   final TransferClient client;
+  final Future<AudioResponse> Function(Track track, Cancellation cancel)?
+  openTrack;
+  bool canDownload(Track track) =>
+      track.source == TrackSource.online &&
+      ((track.providerId == 'direct' && track.downloadAllowed) ||
+          (track.providerId == 'youtube' && openTrack != null));
+  DownloadJob? jobFor(String id) =>
+      _jobs.where((j) => j.track.id == id).lastOrNull;
   final DownloadStore store;
   final LibraryController library;
   final Future<Directory> Function() directory;
@@ -49,6 +58,15 @@ class DownloadController extends ChangeNotifier {
       _jobs.addAll(await store.load());
       final root = await directory();
       for (final job in _jobs) {
+        // A process may stop after the library commit but before the history save.
+        final saved = library.findTrack(job.track.id);
+        if (saved?.source == TrackSource.local &&
+            await File(saved!.location).exists()) {
+          job.status = DownloadStatus.completed;
+          job.localPath = saved.location;
+          job.received = await File(saved.location).length();
+          job.total = job.received;
+        }
         if ({
           DownloadStatus.queued,
           DownloadStatus.downloading,
@@ -63,6 +81,10 @@ class DownloadController extends ChangeNotifier {
             (job.localPath == null || !await File(job.localPath!).exists())) {
           job.status = DownloadStatus.failed;
           job.message = 'O arquivo não está mais no aparelho.';
+          final missing = library.findTrack(job.track.id);
+          if (missing?.source == TrackSource.local) {
+            await library.addResolved(job.track.asOnline(), replaceLocal: true);
+          }
         }
       }
       await _save();
@@ -88,9 +110,7 @@ class DownloadController extends ChangeNotifier {
 
   Future<DownloadJob> enqueue(Track track) async {
     await load();
-    if (!track.downloadAllowed ||
-        track.providerId != 'direct' ||
-        track.source != TrackSource.online) {
+    if (!canDownload(track)) {
       throw const SourceException(
         'Esta faixa está disponível apenas para reprodução online.',
       );
@@ -135,6 +155,45 @@ class DownloadController extends ChangeNotifier {
     _changed();
     unawaited(_pump());
     return job;
+  }
+
+  Future<int> enqueueAll(List<Track> tracks) async {
+    var count = 0;
+    for (final track in tracks) {
+      final current = library.findTrack(track.id) ?? track;
+      if (!canDownload(current)) continue;
+      await enqueue(current);
+      count++;
+    }
+    return count;
+  }
+
+  Future<void> removeOffline(Track track) async {
+    final current = library.findTrack(track.id) ?? track;
+    if (current.source != TrackSource.local) return;
+    final root = p.normalize(p.absolute((await directory()).path));
+    final target = p.normalize(p.absolute(current.location));
+    if (!p.isWithin(root, target) ||
+        !p.basename(target).startsWith('musicon-') ||
+        current.originUrl == null) {
+      throw const SourceException(
+        'Somente downloads do MusicON podem ser removidos aqui.',
+      );
+    }
+    if (jobFor(current.id)?.status == DownloadStatus.downloading) {
+      throw const SourceException('Aguarde o download terminar.');
+    }
+    await library.addResolved(current.asOnline(), replaceLocal: true);
+    try {
+      final file = File(target);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      await library.addResolved(current);
+      throw const SourceException('Não foi possível remover o arquivo.');
+    }
+    _jobs.removeWhere((j) => j.track.id == current.id);
+    await _save();
+    _changed();
   }
 
   Future<void> retry(DownloadJob job) async {
@@ -233,7 +292,9 @@ class DownloadController extends ChangeNotifier {
     var committed = false;
     try {
       cancel.check();
-      response = await client.open(parseWebLink(job.track.location), cancel);
+      response = job.track.providerId == 'youtube'
+          ? await openTrack!(job.track, cancel)
+          : await client.open(parseWebLink(job.track.location), cancel);
       cancel.check();
       if (response.length != null && response.length! > maxBytes) {
         throw const SourceException(

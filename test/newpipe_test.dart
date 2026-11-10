@@ -11,7 +11,7 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-  test('each play resolves a fresh URL and never enables downloads', () async {
+  test('each play resolves a fresh URL and supports an offline transfer', () async {
     var resolves = 0;
     messenger.setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'search') {
@@ -36,7 +36,7 @@ void main() {
     await state.search('Faixa');
     await state.play(state.results.single);
     expect(engine.current!.location, endsWith('token=1'));
-    expect(engine.current!.downloadAllowed, isFalse);
+    expect(engine.current!.downloadAllowed, isTrue);
     await state.play(state.results.single);
     expect(engine.current!.location, endsWith('token=2'));
     state.dispose();

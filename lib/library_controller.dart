@@ -59,8 +59,10 @@ class LibraryController extends ChangeNotifier {
   }
 
   /// Keeps the same id when an online track becomes offline, preserving playlists.
-  Future<Track> addResolved(Track track) async {
-    if (track.providerId == 'youtube' && track.originUrl != null) {
+  Future<Track> addResolved(Track track, {bool replaceLocal = false}) async {
+    if (track.source == TrackSource.online &&
+        track.providerId == 'youtube' &&
+        track.originUrl != null) {
       // Persist the stable page address, never an expiring signed media URL.
       track = Track(
         id: track.id,
@@ -72,6 +74,7 @@ class LibraryController extends ChangeNotifier {
         providerId: 'youtube',
         artworkUrl: track.artworkUrl,
         color: track.color,
+        downloadAllowed: true,
       );
     }
     if (_loadFailed) {
@@ -79,7 +82,8 @@ class LibraryController extends ChangeNotifier {
     }
     final index = _data.tracks.indexWhere((t) => t.id == track.id);
     final previous = index < 0 ? null : _data.tracks[index];
-    if (previous?.source == TrackSource.local &&
+    if (!replaceLocal &&
+        previous?.source == TrackSource.local &&
         track.source == TrackSource.online) {
       return previous!;
     }
@@ -122,6 +126,42 @@ class LibraryController extends ChangeNotifier {
     _data.playlists.add(playlist);
     notifyListeners();
     await _save();
+    return playlist;
+  }
+
+  Future<MusicPlaylist> importCollection(
+    String name,
+    List<Track> tracks,
+  ) async {
+    if (_loadFailed || name.trim().isEmpty || tracks.isEmpty) {
+      throw StateError('Não foi possível importar a coleção.');
+    }
+    final original = LibraryData.fromJson(_data.toJson());
+    final playlist = MusicPlaylist(
+      id: 'p-${DateTime.now().microsecondsSinceEpoch}',
+      name: name.trim(),
+    );
+    for (final track in tracks) {
+      if (findTrack(track.id) == null) _data.tracks.add(track.asOnline());
+      if (!playlist.trackIds.contains(track.id)) {
+        playlist.trackIds.add(track.id);
+      }
+    }
+    _data.playlists.add(playlist);
+    if (!await _save()) {
+      _data.playlists.removeWhere((p) => p.id == playlist.id);
+      final oldIds = original.tracks.map((t) => t.id).toSet();
+      _data.tracks.removeWhere(
+        (t) =>
+            tracks.any((v) => v.id == t.id) &&
+            !oldIds.contains(t.id) &&
+            !_data.favorites.contains(t.id) &&
+            !_data.playlists.any((p) => p.trackIds.contains(t.id)),
+      );
+      notifyListeners();
+      throw StateError('Não foi possível salvar a playlist importada.');
+    }
+    notifyListeners();
     return playlist;
   }
 

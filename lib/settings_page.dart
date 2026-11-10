@@ -8,9 +8,11 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.preferences,
     required this.updates,
+    this.onSpotify,
   });
   final AppPreferences preferences;
   final UpdateService updates;
+  final VoidCallback? onSpotify;
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -123,6 +125,15 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 32),
           const Divider(),
           const SizedBox(height: 20),
+          if (widget.onSpotify != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.queue_music),
+              title: const Text('Spotify'),
+              subtitle: const Text('Conectar conta e importar playlists'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: widget.onSpotify,
+            ),
           const Text(
             'Atualizações',
             style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold),

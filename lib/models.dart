@@ -31,6 +31,20 @@ class Track {
     originUrl: originUrl,
     artworkUrl: artworkUrl,
     licenseUrl: licenseUrl,
+    downloadAllowed: downloadAllowed,
+  );
+  Track asOnline() => Track(
+    id: id,
+    title: title,
+    artist: artist,
+    location: originUrl ?? location,
+    source: TrackSource.online,
+    color: color,
+    providerId: providerId,
+    originUrl: originUrl,
+    artworkUrl: artworkUrl,
+    licenseUrl: licenseUrl,
+    downloadAllowed: downloadAllowed || providerId == 'youtube',
   );
   String get sourceLabel => switch (source) {
     TrackSource.demo => 'Demo • offline',

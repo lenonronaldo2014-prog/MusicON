@@ -7,9 +7,16 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'downloads/audio_network.dart';
 
 class NewPipeAudioSource extends StreamAudioSource {
-  NewPipeAudioSource(this.uri, {required this.headers, super.tag});
+  NewPipeAudioSource(
+    this.uri, {
+    required this.headers,
+    super.tag,
+    this.cancellation,
+  });
+  final Cancellation? cancellation;
   final Uri uri;
   final Map<String, String> headers;
 
@@ -21,6 +28,13 @@ class NewPipeAudioSource extends StreamAudioSource {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
       ..autoUncompress = false;
+    void close() {
+      client.close(force: true);
+      cancellation?.detach(close);
+    }
+
+    cancellation?.attach(close);
+    cancellation?.check();
     final offset = start ?? 0;
     final total = int.tryParse(uri.queryParameters['clen'] ?? '');
     var target = Uri.parse('$uri&range=$offset-${end == null ? '' : end - 1}');
@@ -55,6 +69,7 @@ class NewPipeAudioSource extends StreamAudioSource {
             'Servidor recusou o áudio (HTTP ${response.statusCode}).',
           );
         }
+        cancellation?.check();
         final length = response.contentLength >= 0
             ? response.contentLength
             : null;
@@ -64,24 +79,27 @@ class NewPipeAudioSource extends StreamAudioSource {
           offset: start == null ? null : offset,
           rangeRequestsSupported: total != null,
           contentType: response.headers.contentType?.mimeType ?? 'audio/webm',
-          stream: _read(response, client),
+          stream: _read(response, close),
         );
       }
       throw const HttpException('Redirecionamentos em excesso');
     } catch (_) {
-      client.close(force: true);
+      close();
       rethrow;
     }
   }
 
   Stream<List<int>> _read(
     HttpClientResponse response,
-    HttpClient client,
+    void Function() close,
   ) async* {
     try {
-      yield* response.timeout(const Duration(seconds: 25));
+      await for (final chunk in response.timeout(const Duration(seconds: 25))) {
+        cancellation?.check();
+        yield chunk;
+      }
     } finally {
-      client.close(force: true);
+      close();
     }
   }
 }

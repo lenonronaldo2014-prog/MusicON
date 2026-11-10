@@ -146,6 +146,9 @@ String detectAudio(List<int> bytes, String contentType) {
       'Esse endereço retornou uma página, não um arquivo de áudio. Use o navegador ou cole o link direto.',
     );
   }
+  if (starts([0x1a, 0x45, 0xdf, 0xa3]) && contentType.startsWith('audio/')) {
+    return 'webm';
+  }
   if (starts([73, 68, 51])) return 'mp3'; // ID3
   if (starts([102, 76, 97, 67])) return 'flac';
   if (starts([79, 103, 103, 83])) return 'ogg';

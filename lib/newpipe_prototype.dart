@@ -7,6 +7,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'newpipe_audio_source.dart';
 import 'music_discovery_view.dart';
 import 'audio_engine.dart';
+import 'downloads/audio_network.dart';
 import 'models.dart';
 import 'ui.dart' show musicTheme;
 
@@ -35,10 +36,10 @@ class NewPipeSource {
       track.providerId == 'youtube'
       ? (track.location == track.originUrl
             ? DeferredNewPipeAudioSource(() async {
-                final resolved = await resolve(track.originUrl!);
+                final resolved = await _resolve(track.originUrl!);
                 return NewPipeAudioSource(
-                  Uri.parse(resolved.location),
-                  headers: Map.of(_headers),
+                  Uri.parse(resolved.track.location),
+                  headers: resolved.headers,
                   tag: tag,
                 );
               }, tag: tag)
@@ -58,6 +59,33 @@ class NewPipeSource {
   }
 
   Future<Track> resolve(String url) async {
+    final resolved = await _resolve(url);
+    _headers = resolved.headers;
+    return resolved.track;
+  }
+
+  Future<AudioResponse> openDownload(Track track, Cancellation cancel) async {
+    cancel.check();
+    final resolved = await _resolve(track.originUrl ?? track.location);
+    cancel.check();
+    final audio = await NewPipeAudioSource(
+      Uri.parse(resolved.track.location),
+      headers: resolved.headers,
+      cancellation: cancel,
+    ).request();
+    return AudioResponse(
+      uri: Uri.parse(resolved.track.location),
+      status: 200,
+      contentType: audio.contentType,
+      length: audio.sourceLength ?? audio.contentLength,
+      stream: audio.stream,
+      close: cancel.cancel,
+    );
+  }
+
+  Future<({Track track, Map<String, String> headers})> _resolve(
+    String url,
+  ) async {
     final data = await channel
         .invokeMapMethod<Object?, Object?>('resolve', {'value': url})
         .timeout(const Duration(seconds: 60));
@@ -69,17 +97,20 @@ class NewPipeSource {
         stream.userInfo.isNotEmpty) {
       throw StateError('A fonte não forneceu um endereço de áudio compatível.');
     }
-    _headers = Map<String, String>.from(data['headers'] as Map? ?? {});
-    return Track(
-      id: 'youtube-${data['url']}',
-      title: data['title'] as String,
-      artist: data['artist'] as String? ?? 'YouTube',
-      location: stream.toString(),
-      source: TrackSource.online,
-      providerId: 'youtube',
-      originUrl: data['url'] as String,
-      artworkUrl: data['artwork'] as String?,
-      downloadAllowed: false,
+    final headers = Map<String, String>.from(data['headers'] as Map? ?? {});
+    return (
+      headers: headers,
+      track: Track(
+        id: 'youtube-${data['url']}',
+        title: data['title'] as String,
+        artist: data['artist'] as String? ?? 'YouTube',
+        location: stream.toString(),
+        source: TrackSource.online,
+        providerId: 'youtube',
+        originUrl: data['url'] as String,
+        artworkUrl: data['artwork'] as String?,
+        downloadAllowed: true,
+      ),
     );
   }
 }

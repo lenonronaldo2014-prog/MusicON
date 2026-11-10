@@ -7,6 +7,7 @@ import 'downloads/audio_network.dart';
 import 'downloads/download_controller.dart';
 import 'downloads/download_store.dart';
 import 'library_controller.dart';
+import 'newpipe_prototype.dart';
 import 'sources/direct_source.dart';
 import 'sources/explorer_controller.dart';
 import 'sources/jamendo_source.dart';
@@ -17,7 +18,10 @@ class OnlineServices {
   final ExplorerController explorer;
   final DownloadController downloads;
   final void Function()? close;
-  factory OnlineServices.create(LibraryController library) {
+  factory OnlineServices.create(
+    LibraryController library, {
+    NewPipeSource? source,
+  }) {
     final httpClient = http.Client();
     final transfer = HttpTransferClient();
     const configured = String.fromEnvironment('JAMENDO_CLIENT_ID');
@@ -38,6 +42,7 @@ class OnlineServices {
       ),
       downloads: DownloadController(
         client: transfer,
+        openTrack: source?.openDownload,
         store: PreferencesDownloadStore(),
         library: library,
         directory: () async => Directory(

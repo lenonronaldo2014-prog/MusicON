@@ -131,6 +131,18 @@ class DownloadsPage extends StatelessWidget {
                               ),
                             if (job.status == DownloadStatus.completed)
                               IconButton(
+                                tooltip: 'Remover download',
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _action(
+                                  context,
+                                  () => downloads.removeOffline(
+                                    library.findTrack(job.track.id) ??
+                                        job.track,
+                                  ),
+                                ),
+                              ),
+                            if (job.status == DownloadStatus.completed)
+                              IconButton(
                                 tooltip: 'Tocar download',
                                 icon: const Icon(Icons.play_arrow),
                                 onPressed: () {

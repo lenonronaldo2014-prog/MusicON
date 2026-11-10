@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'audio_engine.dart';
 import 'app_preferences.dart';
 import 'settings_page.dart';
+import 'spotify/spotify_service.dart';
+import 'spotify/spotify_page.dart';
+import 'downloads/download_job.dart';
+import 'explore/downloads_page.dart';
 import 'update_service.dart';
 import 'newpipe_prototype.dart';
 import 'music_discovery_view.dart' show SongArtwork;
@@ -65,6 +69,7 @@ class MusicOnApp extends StatelessWidget {
     this.discovery,
     this.preferences,
     this.updates,
+    this.spotify,
   });
   final LibraryController library;
   final MusicEngine engine;
@@ -72,6 +77,7 @@ class MusicOnApp extends StatelessWidget {
   final PrototypeController? discovery;
   final AppPreferences? preferences;
   final UpdateService? updates;
+  final SpotifyService? spotify;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([?preferences]),
@@ -86,6 +92,7 @@ class MusicOnApp extends StatelessWidget {
         discovery: discovery,
         preferences: preferences,
         updates: updates,
+        spotify: spotify,
       ),
     ),
   );
@@ -100,6 +107,7 @@ class MusicHome extends StatefulWidget {
     this.discovery,
     this.preferences,
     this.updates,
+    this.spotify,
   });
   final LibraryController library;
   final MusicEngine engine;
@@ -107,6 +115,7 @@ class MusicHome extends StatefulWidget {
   final PrototypeController? discovery;
   final AppPreferences? preferences;
   final UpdateService? updates;
+  final SpotifyService? spotify;
   @override
   State<MusicHome> createState() => _MusicHomeState();
 }
@@ -124,8 +133,11 @@ class _MusicHomeState extends State<MusicHome> {
   @override
   void initState() {
     super.initState();
-    services = widget.services ?? OnlineServices.create(library);
+    services =
+        widget.services ??
+        OnlineServices.create(library, source: widget.discovery?.source);
     library.addListener(_onChange);
+    services.downloads.addListener(_onChange);
     engine.addListener(_onChange);
     widget.discovery?.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -159,13 +171,29 @@ class _MusicHomeState extends State<MusicHome> {
       builder: (_) => SettingsPage(
         preferences: widget.preferences!,
         updates: widget.updates!,
+        onSpotify: widget.spotify == null ? null : _spotify,
+      ),
+    ),
+  );
+
+  void _spotify() => Navigator.push(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => SpotifyPage(
+        spotify: widget.spotify!,
+        library: library,
+        source: widget.discovery?.source ?? NewPipeSource(),
       ),
     ),
   );
 
   void _onChange() {
     if (!mounted) return;
-    final error = engine.error ?? library.error ?? widget.discovery?.error;
+    final error =
+        engine.error ??
+        library.error ??
+        widget.discovery?.error ??
+        services.downloads.error;
     if (error != null && error != lastError) {
       lastError = error;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -179,6 +207,7 @@ class _MusicHomeState extends State<MusicHome> {
   @override
   void dispose() {
     library.removeListener(_onChange);
+    services.downloads.removeListener(_onChange);
     engine.removeListener(_onChange);
     widget.discovery?.removeListener(_onChange);
     onlineInput.dispose();
@@ -281,9 +310,60 @@ class _MusicHomeState extends State<MusicHome> {
     if (engine.busy || tracks.isEmpty) return;
     if (engine.shuffle != random) await engine.toggleShuffle();
     await engine.playQueue(
-      tracks,
+      tracks.map((t) => library.findTrack(t.id) ?? t).toList(),
       random ? math.Random().nextInt(tracks.length) : 0,
     );
+  }
+
+  void _downloads() => Navigator.push(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => DownloadsPage(
+        downloads: services.downloads,
+        library: library,
+        engine: engine,
+      ),
+    ),
+  );
+
+  String _offlineLabel(Track track) {
+    if (track.source == TrackSource.local) return 'Disponível offline';
+    final job = services.downloads.jobFor(track.id);
+    if (job == null) return track.sourceLabel;
+    if (job.status == DownloadStatus.downloading && job.progress != null) {
+      return 'Baixando ${(job.progress! * 100).round()}%';
+    }
+    return job.label;
+  }
+
+  Future<void> _downloadTracks(List<Track> tracks) async {
+    var count = 0;
+    try {
+      for (final item in tracks) {
+        if (!await _remember(item)) continue;
+        final track = library.findTrack(item.id) ?? item;
+        if (!services.downloads.canDownload(track)) continue;
+        await services.downloads.enqueue(track);
+        count++;
+      }
+      if (mounted) {
+        _message(
+          count == 0
+              ? 'As faixas já estão no aparelho ou não oferecem download.'
+              : '$count música(s) na fila. Acompanhe em Downloads.',
+        );
+      }
+    } catch (e) {
+      if (mounted) _message(e.toString());
+    }
+  }
+
+  Future<void> _removeOffline(Track track) async {
+    try {
+      await services.downloads.removeOffline(track);
+    } catch (e) {
+      if (mounted) _message(e.toString());
+    }
   }
 
   Future<void> _addToPlaylist(Track track) async {
@@ -332,7 +412,11 @@ class _MusicHomeState extends State<MusicHome> {
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: ink,
-    builder: (_) => PlayerSheet(engine: engine, library: library),
+    builder: (_) => PlayerSheet(
+      engine: engine,
+      library: library,
+      onOffline: () => _downloadTracks([engine.current!]),
+    ),
   );
   void _openPlaylist(MusicPlaylist playlist) => showModalBottomSheet<void>(
     context: context,
@@ -340,7 +424,7 @@ class _MusicHomeState extends State<MusicHome> {
     isScrollControlled: true,
     useSafeArea: true,
     builder: (context) => ListenableBuilder(
-      listenable: library,
+      listenable: Listenable.merge([library, services.downloads]),
       builder: (context, _) {
         final tracks = library.playlistTracks(playlist);
         return SizedBox(
@@ -360,6 +444,13 @@ class _MusicHomeState extends State<MusicHome> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                    ),
+                    IconButton(
+                      tooltip: 'Disponibilizar playlist offline',
+                      onPressed: tracks.isEmpty
+                          ? null
+                          : () => _downloadTracks(tracks),
+                      icon: Icon(Icons.download_for_offline_outlined),
                     ),
                     IconButton.filled(
                       tooltip: 'Tocar em sequência',
@@ -401,7 +492,7 @@ class _MusicHomeState extends State<MusicHome> {
                             artwork: tracks[i].artworkUrl,
                           ),
                           title: Text(tracks[i].title),
-                          subtitle: Text(tracks[i].sourceLabel),
+                          subtitle: Text(_offlineLabel(tracks[i])),
                           onTap: () => engine.playQueue(tracks, i),
                           trailing: IconButton(
                             tooltip: 'Retirar da playlist',
@@ -807,6 +898,7 @@ class _MusicHomeState extends State<MusicHome> {
             artworkUrl: v.artwork,
             source: TrackSource.online,
             providerId: 'youtube',
+            downloadAllowed: true,
           ),
         )
         .toList();
@@ -956,6 +1048,11 @@ class _MusicHomeState extends State<MusicHome> {
                 ),
               ),
               IconButton(
+                tooltip: 'Downloads',
+                onPressed: _downloads,
+                icon: Icon(Icons.download_rounded),
+              ),
+              IconButton(
                 tooltip: 'Criar playlist',
                 onPressed: _createPlaylist,
                 icon: Icon(Icons.playlist_add_rounded),
@@ -980,6 +1077,15 @@ class _MusicHomeState extends State<MusicHome> {
             ],
           ),
         ),
+        if (widget.spotify != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            child: OutlinedButton.icon(
+              onPressed: _spotify,
+              icon: Icon(Icons.playlist_add),
+              label: Text('Importar do Spotify'),
+            ),
+          ),
         const SizedBox(height: 12),
         if (libraryTab != 2)
           Padding(
@@ -1014,6 +1120,11 @@ class _MusicHomeState extends State<MusicHome> {
                       : () => _playCollection(tracks, random: true),
                   icon: Icon(Icons.shuffle),
                   label: Text('Aleatório'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _downloadTracks(tracks),
+                  icon: Icon(Icons.download_for_offline_outlined),
+                  label: Text('Disponibilizar offline'),
                 ),
               ],
             ),
@@ -1090,91 +1201,111 @@ class _MusicHomeState extends State<MusicHome> {
               .toList(),
         );
 
-  Widget _trackList(List<Track> tracks) => ListView.builder(
-    padding: const EdgeInsets.only(bottom: 24),
-    itemCount: tracks.length,
-    itemBuilder: (context, i) {
-      final track = tracks[i];
-      final selected = engine.current?.id == track.id;
-      return ListTile(
-        contentPadding: const EdgeInsets.only(left: 24, right: 8),
-        leading: CoverArt(
-          color: track.color,
-          size: 50,
-          artwork: track.artworkUrl,
-        ),
-        title: Text(
-          track.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: selected
-                ? Theme.of(context).colorScheme.primary
-                : Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+  Widget _trackList(List<Track> items) {
+    final tracks = items.map((t) => library.findTrack(t.id) ?? t).toList();
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 24),
+      itemCount: tracks.length,
+      itemBuilder: (context, i) {
+        final track = tracks[i];
+        final selected = engine.current?.id == track.id;
+        return ListTile(
+          contentPadding: const EdgeInsets.only(left: 24, right: 8),
+          leading: CoverArt(
+            color: track.color,
+            size: 50,
+            artwork: track.artworkUrl,
           ),
-        ),
-        subtitle: Text(
-          '${track.artist} · ${track.sourceLabel}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: muted, fontSize: 11),
-        ),
-        onTap: engine.busy ? null : () => engine.playQueue(tracks, i),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: library.isFavorite(track)
-                  ? 'Remover dos favoritos'
-                  : 'Favoritar',
-              onPressed: () => _favorite(track),
-              icon: Icon(
-                library.isFavorite(track)
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-                color: library.isFavorite(track)
-                    ? Theme.of(context).colorScheme.primary
-                    : muted,
-                size: 21,
-              ),
+          title: Text(
+            track.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
-            PopupMenuButton<String>(
-              tooltip: 'Opções da música',
-              iconSize: 21,
-              onSelected: (action) async {
-                if (action == 'source') {
-                  if (engine.playing) await engine.toggle();
-                  if (!context.mounted) return;
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          BrowserPage(initialUri: Uri.parse(track.originUrl!)),
-                    ),
-                  );
-                } else {
-                  _addToPlaylist(track);
-                }
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'playlist',
-                  child: Text('Adicionar à playlist'),
+          ),
+          subtitle: Text(
+            '${track.artist} · ${_offlineLabel(track)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: muted, fontSize: 11),
+          ),
+          onTap: engine.busy ? null : () => engine.playQueue(tracks, i),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: library.isFavorite(track)
+                    ? 'Remover dos favoritos'
+                    : 'Favoritar',
+                onPressed: () => _favorite(track),
+                icon: Icon(
+                  library.isFavorite(track)
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: library.isFavorite(track)
+                      ? Theme.of(context).colorScheme.primary
+                      : muted,
+                  size: 21,
                 ),
-                if (Uri.tryParse(track.originUrl ?? '')?.scheme == 'https')
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Opções da música',
+                iconSize: 21,
+                onSelected: (action) async {
+                  if (action == 'offline') {
+                    await _downloadTracks([track]);
+                  } else if (action == 'removeOffline') {
+                    await _removeOffline(track);
+                  } else if (action == 'source') {
+                    if (engine.playing) await engine.toggle();
+                    if (!context.mounted) return;
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => BrowserPage(
+                          initialUri: Uri.parse(track.originUrl!),
+                        ),
+                      ),
+                    );
+                  } else {
+                    _addToPlaylist(track);
+                  }
+                },
+                itemBuilder: (_) => [
+                  if (services.downloads.canDownload(track))
+                    const PopupMenuItem(
+                      value: 'offline',
+                      child: Text('Disponibilizar offline'),
+                    ),
+                  if (track.source == TrackSource.local &&
+                      track.originUrl != null)
+                    const PopupMenuItem(
+                      value: 'removeOffline',
+                      child: Text('Remover download'),
+                    ),
                   const PopupMenuItem(
-                    value: 'source',
-                    child: Text('Abrir fonte da música'),
+                    value: 'playlist',
+                    child: Text('Adicionar à playlist'),
                   ),
-              ],
-            ),
-          ],
-        ),
-      );
-    },
-  );
+                  if (Uri.tryParse(track.originUrl ?? '')?.scheme == 'https')
+                    const PopupMenuItem(
+                      value: 'source',
+                      child: Text('Abrir fonte da música'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _miniPlayer() {
     final track = engine.current!;
     return Padding(
@@ -1247,7 +1378,13 @@ class _MusicHomeState extends State<MusicHome> {
 }
 
 class PlayerSheet extends StatelessWidget {
-  const PlayerSheet({super.key, required this.engine, required this.library});
+  const PlayerSheet({
+    super.key,
+    required this.engine,
+    required this.library,
+    this.onOffline,
+  });
+  final VoidCallback? onOffline;
   final MusicEngine engine;
   final LibraryController library;
   @override
@@ -1422,6 +1559,12 @@ class PlayerSheet extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (onOffline != null && track.source == TrackSource.online)
+                      TextButton.icon(
+                        onPressed: onOffline,
+                        icon: Icon(Icons.download_for_offline_outlined),
+                        label: Text('Disponibilizar offline'),
+                      ),
                     if (engine.error != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 16),
