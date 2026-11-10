@@ -13,6 +13,7 @@ abstract class MusicEngine extends ChangeNotifier {
   Duration get duration;
   String? get error;
   Future<void> playQueue(List<Track> tracks, int index);
+  Future<void> removeTrack(String id);
   Future<void> toggle();
   Future<void> seek(Duration position);
   Future<void> next();

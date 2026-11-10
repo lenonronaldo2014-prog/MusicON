@@ -120,7 +120,7 @@ class MusicHome extends StatefulWidget {
   State<MusicHome> createState() => _MusicHomeState();
 }
 
-class _MusicHomeState extends State<MusicHome> {
+class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
   late final OnlineServices services;
   int page = 0;
   int libraryTab = 0;
@@ -133,6 +133,7 @@ class _MusicHomeState extends State<MusicHome> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     services =
         widget.services ??
         OnlineServices.create(library, source: widget.discovery?.source);
@@ -142,8 +143,59 @@ class _MusicHomeState extends State<MusicHome> {
     widget.discovery?.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onChange();
+      library.startDeviceMonitoring();
       if (widget.preferences?.autoUpdates == true) _automaticUpdate();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) library.refreshDevice();
+  }
+
+  void _phoneMusic() {
+    setState(() {
+      page = 3;
+      libraryTab = 0;
+      sourceFilter = 1;
+    });
+    library.refreshDevice(requestPermission: library.mediaAuthorized != true);
+  }
+
+  Future<void> _deleteLocal(Track track) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          track.providerId == 'device'
+              ? 'Excluir música do aparelho?'
+              : 'Excluir cópia importada?',
+        ),
+        content: Text(
+          'O arquivo “${track.title}” será excluído e removido dos favoritos e playlists do MusicON.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Excluir arquivo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final removed = await library.deleteLocal(track);
+      if (removed) {
+        await engine.removeTrack(track.id);
+        if (mounted) _message('Música excluída do aparelho.');
+      }
+    } catch (e) {
+      if (mounted) _message(e.toString());
+    }
   }
 
   Future<void> _automaticUpdate() async {
@@ -206,6 +258,7 @@ class _MusicHomeState extends State<MusicHome> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     library.removeListener(_onChange);
     services.downloads.removeListener(_onChange);
     engine.removeListener(_onChange);
@@ -244,8 +297,19 @@ class _MusicHomeState extends State<MusicHome> {
                 Icons.phone_android_rounded,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              title: Text('Importar do celular'),
-              subtitle: Text('Escolha arquivos de áudio para ouvir offline'),
+              title: Text('Encontrar músicas do celular'),
+              subtitle: Text(
+                'Atualizar automaticamente a biblioteca do aparelho',
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _phoneMusic();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.audio_file_rounded),
+              title: Text('Escolher arquivos'),
+              subtitle: Text('Adicionar arquivos de áudio pelo seletor'),
               onTap: () {
                 Navigator.pop(context);
                 _import();
@@ -327,6 +391,7 @@ class _MusicHomeState extends State<MusicHome> {
   );
 
   String _offlineLabel(Track track) {
+    if (track.providerId == 'device') return 'Do celular';
     if (track.source == TrackSource.local) return 'Disponível offline';
     final job = services.downloads.jobFor(track.id);
     if (job == null) return track.sourceLabel;
@@ -726,11 +791,9 @@ class _MusicHomeState extends State<MusicHome> {
                   ),
                   const SizedBox(height: 22),
                   FilledButton.icon(
-                    onPressed: engine.busy
-                        ? null
-                        : () => engine.playQueue(demoTracks, 0),
+                    onPressed: () => setState(() => page = 1),
                     icon: Icon(Icons.play_arrow_rounded),
-                    label: Text('Experimentar o som'),
+                    label: Text('Explorar músicas'),
                   ),
                 ],
               ),
@@ -746,13 +809,7 @@ class _MusicHomeState extends State<MusicHome> {
               Icons.phone_android_rounded,
               'Do celular',
               'Seu som offline',
-              () {
-                setState(() {
-                  page = 3;
-                  libraryTab = 0;
-                  sourceFilter = 1;
-                });
-              },
+              _phoneMusic,
             ),
           ),
           const SizedBox(width: 12),
@@ -774,7 +831,7 @@ class _MusicHomeState extends State<MusicHome> {
       ),
       const SizedBox(height: 28),
       Text(
-        'Descubra o MusicON',
+        'Sua coleção',
         style: TextStyle(
           fontSize: 21,
           fontWeight: FontWeight.w800,
@@ -783,46 +840,51 @@ class _MusicHomeState extends State<MusicHome> {
       ),
       const SizedBox(height: 6),
       Text(
-        'Três demos originais para entrar no clima.',
+        'Suas músicas e descobertas, sempre por perto.',
         style: TextStyle(color: muted, fontSize: 12),
       ),
       const SizedBox(height: 18),
-      SizedBox(
-        height: 226,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: demoTracks.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 16),
-          itemBuilder: (context, i) {
-            final track = demoTracks[i];
-            return SizedBox(
-              width: 138,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => engine.playQueue(demoTracks, i),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CoverArt(color: track.color, size: 138),
-                    const SizedBox(height: 10),
-                    Text(
-                      track.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'MusicON Lab • demo',
-                      style: TextStyle(color: muted, fontSize: 11),
-                    ),
-                  ],
+      if (library.tracks.isNotEmpty)
+        SizedBox(
+          height: 226,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: math.min(library.tracks.length, 8),
+            separatorBuilder: (_, _) => const SizedBox(width: 16),
+            itemBuilder: (context, i) {
+              final track = library.tracks[i];
+              return SizedBox(
+                width: 138,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => engine.playQueue(library.tracks, i),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CoverArt(
+                        color: track.color,
+                        size: 138,
+                        artwork: track.artworkUrl,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        track.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        track.artist,
+                        style: TextStyle(color: muted, fontSize: 11),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
-      ),
       const SizedBox(height: 20),
       Container(
         padding: const EdgeInsets.all(20),
@@ -844,14 +906,14 @@ class _MusicHomeState extends State<MusicHome> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Importe suas faixas e leve suas playlists com você.',
+              'Encontre automaticamente as músicas que já estão no seu celular.',
               style: TextStyle(color: muted, height: 1.5),
             ),
             const SizedBox(height: 12),
             TextButton.icon(
-              onPressed: library.importing ? null : _import,
-              icon: Icon(Icons.add_rounded),
-              label: Text('Adicionar minhas músicas'),
+              onPressed: library.scanningDevice ? null : _phoneMusic,
+              icon: Icon(Icons.folder_open_rounded),
+              label: Text('Encontrar músicas do celular'),
             ),
           ],
         ),
@@ -1087,6 +1149,45 @@ class _MusicHomeState extends State<MusicHome> {
             ),
           ),
         const SizedBox(height: 12),
+        if (library.supportsDeviceScan)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (library.scanningDevice) LinearProgressIndicator(),
+                if (library.mediaAuthorized == false)
+                  Text(
+                    'Permita o acesso para encontrar as músicas do celular.',
+                  ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: library.scanningDevice
+                          ? null
+                          : () => library.refreshDevice(
+                              requestPermission:
+                                  library.mediaAuthorized != true,
+                            ),
+                      icon: Icon(Icons.refresh),
+                      label: Text(
+                        library.mediaAuthorized == false
+                            ? 'Permitir acesso às músicas'
+                            : 'Atualizar músicas do celular',
+                      ),
+                    ),
+                    if (library.mediaAuthorized == false)
+                      IconButton(
+                        tooltip: 'Abrir permissões do Android',
+                        onPressed: library.openAudioSettings,
+                        icon: Icon(Icons.settings),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         if (libraryTab != 2)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1257,7 +1358,9 @@ class _MusicHomeState extends State<MusicHome> {
                 tooltip: 'Opções da música',
                 iconSize: 21,
                 onSelected: (action) async {
-                  if (action == 'offline') {
+                  if (action == 'deleteLocal') {
+                    await _deleteLocal(track);
+                  } else if (action == 'offline') {
                     await _downloadTracks([track]);
                   } else if (action == 'removeOffline') {
                     await _removeOffline(track);
@@ -1277,6 +1380,11 @@ class _MusicHomeState extends State<MusicHome> {
                   }
                 },
                 itemBuilder: (_) => [
+                  if (library.canDeleteLocal(track))
+                    const PopupMenuItem(
+                      value: 'deleteLocal',
+                      child: Text('Excluir música do aparelho'),
+                    ),
                   if (services.downloads.canDownload(track))
                     const PopupMenuItem(
                       value: 'offline',

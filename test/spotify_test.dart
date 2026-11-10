@@ -76,8 +76,15 @@ void main() {
         store: store,
         openBrowser: (uri) async {
           authorization = uri;
+          expect(
+            uri.queryParameters['redirect_uri'],
+            'http://127.0.0.1:8888/callback',
+          );
           final callback = Uri.parse(uri.queryParameters['redirect_uri']!);
-          final client = HttpOverrides.runWithHttpOverrides(() => HttpClient(), RealHttp());
+          final client = HttpOverrides.runWithHttpOverrides(
+            () => HttpClient(),
+            RealHttp(),
+          );
           try {
             final invalid = await client.getUrl(
               callback.replace(

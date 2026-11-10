@@ -40,7 +40,10 @@ class SpotifySong {
 
 class SpotifyService extends ChangeNotifier {
   SpotifyService({
-    this.clientId = const String.fromEnvironment('SPOTIFY_CLIENT_ID'),
+    this.clientId = const String.fromEnvironment(
+      'SPOTIFY_CLIENT_ID',
+      defaultValue: '72724fddb001416eb61905d339d963b6',
+    ),
     http.Client? client,
     this.store = const SecureSpotifyStore(),
     Future<void> Function(Uri)? openBrowser,
@@ -106,7 +109,7 @@ class SpotifyService extends ChangeNotifier {
     }
     final epoch = ++_epoch;
     final verifier = _random(), state = _random();
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8888);
     _server = server;
     final redirect = 'http://127.0.0.1:${server.port}/callback';
     final completed = Completer<String>();

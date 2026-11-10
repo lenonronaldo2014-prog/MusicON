@@ -6,6 +6,12 @@ O MusicON é um projeto independente de player Android. Não é afiliado ao Spot
 
 Favoritos, playlists, cor do aplicativo e histórico de downloads ficam no armazenamento privado do app no seu aparelho. Arquivos baixados são guardados nesse armazenamento e podem ser removidos em Downloads ou pelo menu da música. Desinstalar o app pode remover esses dados; as versões com a mesma assinatura preservam a biblioteca ao atualizar.
 
+## Biblioteca de músicas do celular
+
+Com a sua permissão de áudio, o MusicON consulta o catálogo MediaStore do Android para encontrar músicas já presentes no armazenamento compartilhado. Essa leitura é local: nomes e artistas dos arquivos não são enviados a um servidor de catálogo do MusicON. O app acompanha mudanças e atualiza a biblioteca ao voltar ao primeiro plano. Você pode revogar a permissão nas configurações do Android; a leitura automática deixa de estar disponível até autorizá-la novamente.
+
+A exclusão de arquivos locais só acontece após sua confirmação no aplicativo e, quando necessário, pelo próprio Android. Cancelar não exclui o arquivo. Remover um download interno mantém a referência online; excluir um arquivo do aparelho remove também suas referências nos favoritos e playlists do MusicON.
+
 ## Busca e reprodução
 
 A fonte de busca recebe os termos que você informa. Ao buscar uma versão de uma música de uma playlist importada, o título e o artista dessa faixa são enviados à fonte de busca somente após sua ação. Serviços de reprodução recebem as requisições necessárias para fornecer o áudio e as capas. Esses serviços podem conhecer o endereço IP e informações técnicas da conexão.

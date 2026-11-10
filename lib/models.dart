@@ -1,3 +1,4 @@
+// Keep demo only to read and migrate libraries from older installations.
 enum TrackSource { demo, local, online }
 
 class Track {
@@ -96,33 +97,6 @@ class MusicPlaylist {
     trackIds: List<String>.from(json['trackIds'] as List),
   );
 }
-
-const demoTracks = [
-  Track(
-    id: 'demo-aurora',
-    title: 'Aurora',
-    artist: 'MusicON Lab',
-    location: 'assets/audio/aurora.wav',
-    source: TrackSource.demo,
-    color: 0,
-  ),
-  Track(
-    id: 'demo-orbita',
-    title: 'Órbita',
-    artist: 'MusicON Lab',
-    location: 'assets/audio/orbita.wav',
-    source: TrackSource.demo,
-    color: 1,
-  ),
-  Track(
-    id: 'demo-mare',
-    title: 'Maré violeta',
-    artist: 'MusicON Lab',
-    location: 'assets/audio/mare.wav',
-    source: TrackSource.demo,
-    color: 2,
-  ),
-];
 
 String? validateAudioUrl(String value) {
   final uri = Uri.tryParse(value.trim());

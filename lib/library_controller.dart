@@ -6,9 +6,20 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'models.dart';
 import 'library_store.dart';
+import 'device_audio_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LibraryController extends ChangeNotifier {
-  LibraryController(this.store);
+  LibraryController(this.store, {this.device});
+  final DeviceAudioService? device;
+  bool scanningDevice = false;
+  bool? mediaAuthorized;
+  bool _monitoring = false;
+  bool _rescan = false;
+  bool _disposed = false;
+  StreamSubscription<void>? _deviceChanges;
+  Timer? _scanTimer;
+  bool get supportsDeviceScan => device != null;
   final LibraryStore store;
   LibraryData _data = LibraryData();
   bool importing = false;
@@ -16,7 +27,13 @@ class LibraryController extends ChangeNotifier {
   bool _loadFailed = false;
   String? error;
   Future<void> _saveTail = Future.value();
-  List<Track> get tracks => [...demoTracks, ..._data.tracks];
+  List<Track> get tracks => _data.tracks
+      .where(
+        (t) =>
+            t.source != TrackSource.demo &&
+            (mediaAuthorized != false || t.providerId != 'device'),
+      )
+      .toList();
   List<MusicPlaylist> get playlists => List.unmodifiable(_data.playlists);
   bool isFavorite(Track track) => _data.favorites.contains(track.id);
   List<Track> playlistTracks(MusicPlaylist playlist) => playlist.trackIds
@@ -25,6 +42,19 @@ class LibraryController extends ChangeNotifier {
   Future<void> load() async {
     try {
       _data = await store.load();
+      final obsolete = _data.tracks
+          .where((t) => t.source == TrackSource.demo)
+          .map((t) => t.id)
+          .toSet();
+      _data.tracks.removeWhere((t) => t.source == TrackSource.demo);
+      _data.favorites.removeWhere(
+        (id) => id.startsWith('demo-') || obsolete.contains(id),
+      );
+      for (final list in _data.playlists) {
+        list.trackIds.removeWhere(
+          (id) => id.startsWith('demo-') || obsolete.contains(id),
+        );
+      }
     } catch (_) {
       _loadFailed = true;
       error =
@@ -32,6 +62,124 @@ class LibraryController extends ChangeNotifier {
     }
     ready = true;
     notifyListeners();
+  }
+
+  Future<void> startDeviceMonitoring() async {
+    if (device == null || _monitoring || _disposed) return;
+    _monitoring = true;
+    _deviceChanges = device!.changes.listen(
+      (_) {
+        _scanTimer?.cancel();
+        _scanTimer = Timer(
+          const Duration(milliseconds: 700),
+          () => refreshDevice(),
+        );
+      },
+      onError: (Object _) {
+        /* Resume/manual refresh still works. */
+      },
+    );
+    var asked = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      asked = prefs.getBool('musicon.audioPermissionAsked') ?? false;
+      if (!asked) await prefs.setBool('musicon.audioPermissionAsked', true);
+    } catch (_) {
+      /* The permission can still be requested from the library. */
+    }
+    if (!_disposed) await refreshDevice(requestPermission: !asked);
+  }
+
+  Future<void> refreshDevice({bool requestPermission = false}) async {
+    if (device == null || _disposed || _loadFailed) return;
+    if (scanningDevice) {
+      _rescan = true;
+      return;
+    }
+    scanningDevice = true;
+    error = null;
+    notifyListeners();
+    try {
+      final snapshot = await device!.scan(requestPermission: requestPermission);
+      if (_disposed) return;
+      mediaAuthorized = snapshot.authorized;
+      if (!snapshot.authorized) return;
+      final ids = snapshot.tracks.map((t) => t.id).toSet();
+      final missing = _data.tracks
+          .where((t) => t.providerId == 'device' && !ids.contains(t.id))
+          .map((t) => t.id)
+          .toSet();
+      _data.tracks.removeWhere((t) => t.providerId == 'device');
+      _data.tracks.addAll(snapshot.tracks);
+      _data.favorites.removeAll(missing);
+      for (final playlist in _data.playlists) {
+        playlist.trackIds.removeWhere(missing.contains);
+      }
+      await _save();
+    } catch (_) {
+      if (!_disposed) {
+        error =
+            'Não foi possível ler as músicas do aparelho. Confira a permissão e tente atualizar.';
+      }
+    } finally {
+      scanningDevice = false;
+      if (!_disposed) notifyListeners();
+      if (_rescan && !_disposed) {
+        _rescan = false;
+        unawaited(refreshDevice());
+      }
+    }
+  }
+
+  Future<void> openAudioSettings() async => device?.openSettings();
+
+  bool canDeleteLocal(Track track) =>
+      track.source == TrackSource.local &&
+      (track.providerId == 'device' ||
+          (track.originUrl == null && track.id.startsWith('local-')));
+
+  Future<bool> deleteLocal(Track track) async {
+    if (!canDeleteLocal(track)) {
+      throw StateError('Somente músicas locais podem ser excluídas aqui.');
+    }
+    if (track.providerId == 'device') {
+      if (device == null || !await device!.delete(track)) return false;
+    } else {
+      final root = p.normalize(
+        p.absolute(
+          p.join((await getApplicationDocumentsDirectory()).path, 'music'),
+        ),
+      );
+      final target = p.normalize(p.absolute(track.location));
+      if (!p.isWithin(root, target) || !p.basename(target).startsWith('local-')) {
+        throw StateError(
+          'Este arquivo não pertence à pasta de músicas importadas.',
+        );
+      }
+      final file = File(target);
+      if (await file.exists()) await file.delete();
+    }
+    _data.tracks.removeWhere((t) => t.id == track.id);
+    _data.favorites.remove(track.id);
+    for (final playlist in _data.playlists) {
+      playlist.trackIds.remove(track.id);
+    }
+    final saved = await _save();
+    if (!_disposed) notifyListeners();
+    if (!saved) {
+      throw StateError(
+        'O arquivo foi excluído, mas não foi possível atualizar a biblioteca salva.',
+      );
+    }
+    return true;
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _scanTimer?.cancel();
+    _deviceChanges?.cancel();
+    super.dispose();
   }
 
   Future<bool> _save() {

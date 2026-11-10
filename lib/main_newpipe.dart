@@ -17,6 +17,7 @@ import 'update_service.dart';
 import 'online_services.dart';
 import 'spotify/spotify_service.dart';
 import 'models.dart';
+import 'device_audio_service.dart';
 import 'downloads/download_job.dart';
 
 Future<void> main() async {
@@ -33,7 +34,7 @@ Future<void> main() async {
   final source = NewPipeSource();
   final engine = JustAudioEngine(onlineSourceFactory: source.audioSource);
   final controller = PrototypeController(source, engine);
-  final library = LibraryController(PreferencesLibraryStore());
+  final library = LibraryController(PreferencesLibraryStore(), device: AndroidDeviceAudioService());
   await library.load();
   final preferences = AppPreferences();
   await preferences.load();

@@ -4,21 +4,34 @@ Player Android em Flutter com identidade própria, busca online, músicas do apa
 
 [Baixar APK](https://github.com/lenonronaldo2014-prog/MusicON/releases/latest) · [Configurar Spotify](docs/spotify-setup.md) · [Privacidade](docs/privacy.md)
 
-<img src="docs/images/inicio-verde.png" width="280" alt="Tela inicial do MusicON no tema verde"> <img src="docs/images/configuracoes.png" width="280" alt="Configurações de cores e atualizações">
+<img src="docs/images/inicio-atual.png" width="280" alt="Tela inicial do MusicON com músicas da coleção"> <img src="docs/images/configuracoes.png" width="280" alt="Configurações de cores e atualizações">
 
-<img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Integração Spotify aguardando ativação">
+<img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
-## Versão 0.6.0
+## Versão 0.7.0
 
 - Tela inicial original preservada e navegação Início / Buscar / Biblioteca.
 - Busca de músicas e artistas com NewPipeExtractor v0.27.0, até 20 resultados por consulta, sem login do YouTube.
 - Capas/miniaturas reais quando fornecidas pela fonte; imagem ilustrada de reserva. Miniatura de vídeo não garante uma capa oficial de álbum.
-- Importação de arquivos locais, favoritos e playlists salvas no aparelho.
+- Leitura automática das músicas do celular pelo MediaStore, com permissão de áudio do Android, atualização ao voltar ao app e acompanhamento de mudanças no catálogo.
+- Favoritos e playlists salvas no aparelho, sem músicas demo incluídas.
+- Exclusão de arquivos do celular pelo menu, com confirmação do app e do Android quando exigida. Faixas online não oferecem exclusão do arquivo original.
+- O seletor de arquivos continua disponível como opção adicional.
 - Filas em sequência ou aleatório, anterior, próxima, repetição e reprodução em segundo plano.
 - Seis cores salvas por usuário no aparelho: violeta, azul, verde, rosa, dourado e coral.
 - Consulta à última Release pública no GitHub e opção de verificar novidades ao abrir.
 - Download completo de músicas ou de uma coleção para ouvir offline.
-- Integração opcional de playlists Spotify implementada, aguardando o cadastro descrito abaixo.
+- Integração opcional de playlists Spotify configurada com o Client ID público do MusicON e retorno `http://127.0.0.1:8888/callback`.
+
+## Músicas do celular
+
+Na primeira execução, permita ao MusicON acessar músicas e áudio. O aplicativo consulta o índice MediaStore do Android sem copiar cada arquivo para seu armazenamento privado. Novos arquivos são atualizados automaticamente, e o catálogo é consultado ao voltar ao app. O botão **Do celular** abre a biblioteca local; **Atualizar músicas do celular** permite refazer a leitura. Se a permissão for negada, a biblioteca mostra como permitir o acesso ou abrir as configurações do Android.
+
+A leitura inclui arquivos marcados como música pelo catálogo do sistema. Não acessa arquivos privados/protegidos de outros aplicativos. Os downloads internos do MusicON continuam separados da biblioteca compartilhada, evitando indexar a mesma cópia novamente.
+
+No menu de um arquivo do aparelho, escolha **Excluir música do aparelho**. O app pede confirmação e utiliza o consentimento do Android quando exigido. Cancelar mantém o arquivo. Depois de excluir, o item sai dos favoritos, das playlists e da fila de reprodução. Cópias importadas anteriormente pelo seletor têm confirmação específica para excluir a cópia privada. O download de uma faixa online continua usando **Remover download**, que preserva sua referência na coleção.
+
+As demos antigas foram retiradas dos assets e seus itens são descartados ao recuperar a biblioteca. A identidade visual e o desenho da tela inicial permanecem; o cartão agora abre a busca e a seção Sua coleção mostra músicas reais.
 
 ## Ouvir offline
 
@@ -34,7 +47,7 @@ Os endereços temporários de mídia são resolvidos quando necessários e não 
 
 Abra **Biblioteca > Importar do Spotify** ou **Configurações > Spotify**. A integração usa a API oficial para ler as playlists autorizadas pela conta, inclusive por link quando acessível. O usuário escolhe as versões encontradas no MusicON antes de salvar uma coleção, na ordem original. A importação pode ser parcial, e a versão escolhida pode ser diferente da gravação listada no Spotify.
 
-**O login ainda não está ativado no APK 0.6.0: falta cadastrar o MusicON e fornecer o Client ID público.** A tela informa que a conexão está em preparação, sem simular login. O fluxo implementado foi testado com retorno real em loopback e respostas simuladas da API; a conexão de uma conta Spotify real continua pendente.
+**O Client ID público foi configurado no APK 0.7.0.** A opção Conectar ao Spotify abre o login no navegador e usa o redirecionamento `http://127.0.0.1:8888/callback`, aceito no cadastro do projeto. O fluxo foi testado com retorno real em loopback e respostas simuladas da API; a conexão com uma conta Spotify real ainda precisa ser concluída pelo usuário. Não é necessário conectar para usar o restante do app.
 
 O código utiliza Authorization Code com PKCE S256, valida `state`, guarda tokens cifrados com uma chave do Android Keystore, renova a sessão e permite desconectar. Não há Client Secret no APK. A integração fornece a lista de faixas, não arquivos de áudio do Spotify. O offline utiliza a fonte das versões que o usuário selecionou no MusicON.
 
@@ -58,7 +71,7 @@ Os APKs atuais usam a mesma chave local de desenvolvimento das entregas anterior
 
 ## Validação
 
-A análise estática passou sem problemas e os **40 testes automatizados** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação e integração Spotify. Os testes de API simulam as respostas externas; isso não substitui um login real.
+A análise estática passou sem problemas e os **44 testes automatizados** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação e integração Spotify. Os testes de API simulam as respostas externas; isso não substitui um login real.
 
 Ensaio offline 0.6.0 no emulador:
 
@@ -69,6 +82,8 @@ Ensaio offline 0.6.0 no emulador:
 - O ensaio também confirmou escrita/leitura do armazenamento cifrado nativo com um valor de teste, apagado ao final.
 
 O APK release final também foi validado pela tela Downloads com rede desligada: posição de reprodução de 6.014 ms antes de pausar, sem erro registrado do player.
+
+O fluxo local 0.7.0 foi verificado no emulador: um WAV de teste apareceu automaticamente pelo MediaStore, tocou por URI de conteúdo e alcançou 3.232 ms antes de pausar. Negar a confirmação de exclusão do Android manteve o arquivo; permitir removeu o arquivo, a entrada da biblioteca e o item do player. A revogação e a concessão de acesso à mídia também foram exercitadas. Os arquivos de teste foram gerados para validação, não fazem parte do APK.
 
 O relato anterior de áudio picotando/distorcido seguido de silêncio no emulador continua exigindo comparação com celular físico. Compilar em release e ver a posição avançar não comprova qualidade audível; esta entrega não declara esse problema resolvido.
 

@@ -94,7 +94,10 @@ class JustAudioEngine extends MusicEngine {
         );
         return switch (t.source) {
           TrackSource.demo => AudioSource.asset(t.location, tag: tag),
-          TrackSource.local => AudioSource.file(t.location, tag: tag),
+          TrackSource.local =>
+            t.location.startsWith('content://')
+                ? AudioSource.uri(Uri.parse(t.location), tag: tag)
+                : AudioSource.file(t.location, tag: tag),
           TrackSource.online =>
             onlineSourceFactory?.call(t, tag) ??
                 AudioSource.uri(Uri.parse(t.location), tag: tag),
@@ -111,6 +114,22 @@ class JustAudioEngine extends MusicEngine {
       _changed();
     }
   }
+
+  @override
+  Future<void> removeTrack(String id) => _guard(() async {
+    for (var i = _queue.length - 1; i >= 0; i--) {
+      if (_queue[i].id != id) continue;
+      if (_queue.length == 1) {
+        await _player.stop();
+        await _player.clearAudioSources();
+        _queue.clear();
+      } else {
+        _queue.removeAt(i);
+        await _player.removeAudioSourceAt(i);
+      }
+    }
+    _changed();
+  });
 
   @override
   Future<void> toggle() => _guard(() async {

@@ -18,8 +18,32 @@ import 'package:musicon/sources/jamendo_source.dart';
 import 'package:musicon/sources/media_source.dart';
 import 'online_test.dart' as fixtures;
 
+const fixtureTracks = [
+  Track(
+    id: 'fixture-a',
+    title: 'Faixa A',
+    artist: 'Artista teste',
+    location: '/test/a.mp3',
+    source: TrackSource.local,
+  ),
+  Track(
+    id: 'fixture-b',
+    title: 'Faixa B',
+    artist: 'Artista teste',
+    location: '/test/b.mp3',
+    source: TrackSource.local,
+  ),
+  Track(
+    id: 'fixture-c',
+    title: 'Faixa C',
+    artist: 'Artista teste',
+    location: '/test/c.mp3',
+    source: TrackSource.local,
+  ),
+];
+
 class MemoryStore implements LibraryStore {
-  LibraryData data = LibraryData();
+  LibraryData data = LibraryData(tracks: List.of(fixtureTracks));
   @override
   Future<LibraryData> load() async => LibraryData.fromJson(data.toJson());
   @override
@@ -56,6 +80,16 @@ class FakeEngine extends MusicEngine {
     queue = tracks;
     index = selected;
     playing = true;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> removeTrack(String id) async {
+    final currentId = current?.id;
+    queue = queue.where((t) => t.id != id).toList();
+    index = queue.indexWhere((t) => t.id == currentId);
+    if (index < 0) index = 0;
+    if (queue.isEmpty) playing = false;
     notifyListeners();
   }
 
@@ -155,18 +189,21 @@ void main() {
       'https://example.com/audio.mp3',
     );
     final playlist = (await first.createPlaylist('Minha mistura'))!;
-    await first.addToPlaylist(playlist, demoTracks.first);
+    await first.addToPlaylist(playlist, fixtureTracks.first);
     await first.addToPlaylist(playlist, online);
     await first.addToPlaylist(playlist, online);
     await first.toggleFavorite(online);
     final second = LibraryController(store);
     await second.load();
     expect(second.playlistTracks(second.playlists.single).map((t) => t.id), [
-      demoTracks.first.id,
+      fixtureTracks.first.id,
       online.id,
     ]);
     expect(second.isFavorite(online), isTrue);
-    await second.removeFromPlaylist(second.playlists.single, demoTracks.first);
+    await second.removeFromPlaylist(
+      second.playlists.single,
+      fixtureTracks.first,
+    );
     expect(second.playlists.single.trackIds, [online.id]);
   });
   test('online entries reject invalid schemes and deduplicate links', () async {
@@ -194,14 +231,14 @@ void main() {
     final library = LibraryController(store);
     await library.load();
     await Future.wait([
-      library.toggleFavorite(demoTracks.first),
-      library.toggleFavorite(demoTracks.first),
-      library.toggleFavorite(demoTracks[1]),
+      library.toggleFavorite(fixtureTracks.first),
+      library.toggleFavorite(fixtureTracks.first),
+      library.toggleFavorite(fixtureTracks[1]),
     ]);
     final restored = LibraryController(store);
     await restored.load();
-    expect(restored.isFavorite(demoTracks.first), isFalse);
-    expect(restored.isFavorite(demoTracks[1]), isTrue);
+    expect(restored.isFavorite(fixtureTracks.first), isFalse);
+    expect(restored.isFavorite(fixtureTracks[1]), isTrue);
   });
   testWidgets('home, player, search and favorites work at phone width', (
     tester,
@@ -234,13 +271,15 @@ void main() {
         image.dispose();
       });
     }
-    await tester.tap(find.text('Experimentar o som'));
+    await tester.tap(find.text('Biblioteca'));
     await tester.pumpAndSettle();
-    expect(engine.current?.id, demoTracks.first.id);
+    await tester.tap(find.text('Faixa A'));
+    await tester.pumpAndSettle();
+    expect(engine.current?.id, fixtureTracks.first.id);
     await tester.tap(find.byTooltip('Pausar'));
     await tester.pump();
     expect(engine.playing, isFalse);
-    await tester.tap(find.text('Aurora').last);
+    await tester.tap(find.text('Faixa A').last);
     await tester.pumpAndSettle();
     expect(find.text('AGORA NO SEU MUNDO'), findsOneWidget);
     await tester.tap(find.byTooltip('Ativar aleatório'));
@@ -253,18 +292,18 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'órbita');
+    await tester.enterText(find.byType(TextField), 'faixa b');
     await tester.pumpAndSettle();
-    expect(find.text('Órbita'), findsOneWidget);
-    expect(find.text('Maré violeta'), findsNothing);
+    expect(find.text('Faixa B'), findsOneWidget);
+    expect(find.text('Faixa C'), findsNothing);
     await tester.tap(find.byTooltip('Favoritar'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Biblioteca'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Favoritas'));
     await tester.pumpAndSettle();
-    expect(find.text('Órbita'), findsOneWidget);
-    expect(find.text('Maré violeta'), findsNothing);
+    expect(find.text('Faixa B'), findsOneWidget);
+    expect(find.text('Faixa C'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets('create playlist and route online links to explorer', (

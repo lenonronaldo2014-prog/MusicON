@@ -13,6 +13,9 @@ class MainActivity : AudioServiceActivity() {
         if (!flutterEngine.plugins.has(NewPipeBridge::class.java)) {
             flutterEngine.plugins.add(NewPipeBridge())
         }
+        if (!flutterEngine.plugins.has(DeviceAudioPlugin::class.java)) {
+            flutterEngine.plugins.add(DeviceAudioPlugin())
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "musicon/app")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
