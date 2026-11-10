@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force -Path $licenses | Out-Null
 Copy-Item -Path 'desktop/extractor/build/licenses/*' -Destination $licenses -Recurse -Force
 $runtime=Join-Path $support 'runtime'
 if (-not (Test-Path -LiteralPath $runtime)) {
-  & (Join-Path $env:JAVA_HOME 'bin/jlink.exe') --add-modules java.base,java.net.http,java.logging,java.xml,java.desktop,java.scripting,jdk.dynalink,jdk.crypto.ec,jdk.unsupported --output $runtime --strip-debug --no-header-files --no-man-pages --compress=2
+  & (Join-Path $env:JAVA_HOME 'bin/jlink.exe') --add-modules java.base,java.compiler,java.net.http,java.logging,java.xml,java.desktop,java.scripting,java.sql,jdk.dynalink,jdk.crypto.ec,jdk.unsupported --output $runtime --strip-debug --no-header-files --no-man-pages --compress=2
   if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar o runtime.' }
 }
 Copy-Item -LiteralPath LICENSE -Destination (Join-Path $support 'MusicON-LICENSE')

@@ -1,6 +1,6 @@
 # Privacidade do MusicON
 
-O MusicON é um projeto independente de player Android. Não é afiliado ao Spotify, YouTube ou NewPipe.
+O MusicON é um projeto independente de player Android e Windows. Não é afiliado ao Spotify, YouTube ou NewPipe.
 
 ## Dados no aparelho
 
@@ -20,7 +20,7 @@ A fonte de busca recebe os termos que você informa. Ao buscar uma versão de um
 
 ## Spotify opcional
 
-Se você conectar uma conta, pode escolher o aplicativo Spotify compatível instalado ou o navegador do aparelho, diretamente no Spotify. O MusicON não recebe sua senha. Solicita apenas leitura de playlists privadas e colaborativas para listar as coleções e permitir a transferência de seus metadados mediante sua escolha. A sessão é guardada cifrada com uma chave protegida pelo Android Keystore.
+Se você conectar uma conta, no Android pode escolher o aplicativo Spotify compatível instalado ou o navegador do aparelho; no Windows, a autorização usa o navegador. O MusicON não recebe sua senha. Solicita apenas leitura de playlists privadas e colaborativas para listar as coleções e permitir a transferência de seus metadados mediante sua escolha. A sessão é guardada cifrada com uma chave protegida pelo Android Keystore no Android ou pelo DPAPI no Windows.
 
 Você pode usar Desconectar na tela do Spotify para apagar a sessão. As listas recuperadas para navegação não são armazenadas em servidor do MusicON. As coleções que você confirmou para salvar na biblioteca do MusicON permanecem no aparelho. Você também pode revogar o acesso na página de aplicativos da sua conta Spotify.
 
