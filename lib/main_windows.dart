@@ -155,19 +155,23 @@ Future<void> _smoke(
       'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
     );
     await engine.playQueue([online], 0);
+    final onlineStart = engine.position.inMilliseconds;
     final onlineEnd = DateTime.now().add(const Duration(seconds: 30));
-    while (engine.position.inMilliseconds < 1200 &&
+    while (engine.position.inMilliseconds < onlineStart + 1200 &&
         engine.error == null &&
         DateTime.now().isBefore(onlineEnd)) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
     report['onlinePositionMs'] = engine.position.inMilliseconds;
+    report['onlineStartedAtMs'] = onlineStart;
     report['onlineError'] = engine.error;
     await engine.removeTrack(online.id);
     report['passed'] =
         engine.error == null &&
+        report['localError'] == null &&
+        report['onlineError'] == null &&
         (report['localPositionMs'] as int) > 1000 &&
-        (report['onlinePositionMs'] as int) > 1000 &&
+        (report['onlinePositionMs'] as int) >= onlineStart + 1000 &&
         search.isNotEmpty;
   } catch (error) {
     report['passed'] = false;

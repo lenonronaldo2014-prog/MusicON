@@ -19,7 +19,8 @@ import org.schabi.newpipe.extractor.services.youtube.YoutubeParsingHelper;
 /** Private JSON-lines subprocess; never exposes a network control port. */
 public final class ExtractorMain {
     public static void main(String[] args) throws Exception {
-        final PrintStream protocol = System.out;
+        final PrintStream protocol = new PrintStream(
+                new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8);
         System.setOut(new PrintStream(OutputStream.nullOutputStream()));
         NewPipe.init(new DesktopDownloader(), new Localization("pt", "BR"));
         Gson gson = new Gson();
