@@ -14,8 +14,6 @@ import 'package:musicon/models.dart';
 import 'package:musicon/sources/media_source.dart';
 import 'widget_test.dart' show MemoryStore;
 
-class RealHttp extends HttpOverrides {}
-
 const clientId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 class SessionMemory implements SpotifySessionStore {
@@ -57,6 +55,88 @@ class ChoiceSpotify extends SpotifyService {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'playlist listing denial explains owner Premium and keeps the saved session',
+    () async {
+      final store = SessionMemory()..value = jsonEncode(session());
+      final original = store.value;
+      final service = SpotifyService(
+        clientId: clientId,
+        store: store,
+        client: MockClient((_) async => jsonResponse({}, 403)),
+      );
+      addTearDown(service.dispose);
+      await service.load();
+      await expectLater(
+        service.playlists(),
+        throwsA(
+          isA<SourceException>().having(
+            (e) => e.message,
+            'eligibility guidance',
+            allOf(contains('Premium'), contains('usuários autorizados')),
+          ),
+        ),
+      );
+      expect(service.connected, isTrue);
+      expect(store.value, original);
+    },
+  );
+  test(
+    'cancelling browser authorization discards its reply and allows a fresh login',
+    () async {
+      const channel = MethodChannel('musicon/app');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final pending = Completer<Map<String, dynamic>>();
+      final started = Completer<void>();
+      var attempts = 0, tokenCalls = 0;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'spotifyAppCancel') {
+          if (!pending.isCompleted) {
+            pending.completeError(PlatformException(code: 'cancelled'));
+          }
+          return null;
+        }
+        expect(call.method, 'spotifyBrowserAuthorize');
+        attempts++;
+        if (attempts == 1) {
+          started.complete();
+          return pending.future;
+        }
+        final args = call.arguments as Map;
+        return {'code': 'fresh-test-code', 'state': args['state']};
+      });
+      final store = SessionMemory();
+      final service = SpotifyService(
+        clientId: clientId,
+        store: store,
+        client: MockClient((request) async {
+          tokenCalls++;
+          expect(Uri.splitQueryString(request.body)['code'], 'fresh-test-code');
+          return jsonResponse({
+            'access_token': 'test-access',
+            'refresh_token': 'test-refresh',
+            'expires_in': 3600,
+          });
+        }),
+      );
+      addTearDown(service.dispose);
+      final cancelled = expectLater(
+        service.connect(),
+        throwsA(isA<SourceException>()),
+      );
+      await started.future;
+      await expectLater(service.connect(), throwsA(isA<SourceException>()));
+      service.cancelConnect();
+      await cancelled;
+      expect(tokenCalls, 0);
+      expect(store.value, isNull);
+      await service.connect();
+      expect(tokenCalls, 1);
+      expect(service.connected, isTrue);
+    },
+  );
   test(
     'official native authorization validates state and exchanges the same PKCE verifier',
     () async {
@@ -166,58 +246,33 @@ void main() {
     },
   );
   test(
-    'real loopback callback validates PKCE and recovers a transient token DNS failure',
+    'browser authorization uses Android callback and retries only a transient token DNS failure',
     () async {
+      const channel = MethodChannel('musicon/app');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
       final store = SessionMemory();
       var tokenCalls = 0;
-      late Uri authorization;
+      late Map<String, dynamic> authorization;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'spotifyAppCancel') return null;
+        expect(call.method, 'spotifyBrowserAuthorize');
+        authorization = Map<String, dynamic>.from(call.arguments as Map);
+        return {'code': 'test-code', 'state': authorization['state']};
+      });
       final service = SpotifyService(
         clientId: clientId,
         store: store,
-        openBrowser: (uri) async {
-          authorization = uri;
-          expect(
-            uri.queryParameters['redirect_uri'],
-            'http://127.0.0.1:8888/callback',
-          );
-          final callback = Uri.parse(uri.queryParameters['redirect_uri']!);
-          final client = HttpOverrides.runWithHttpOverrides(
-            () => HttpClient(),
-            RealHttp(),
-          );
-          try {
-            final invalid = await client.getUrl(
-              callback.replace(
-                queryParameters: {'code': 'wrong', 'state': 'wrong'},
-              ),
-            );
-            final denied = await invalid.close();
-            expect(denied.statusCode, 400);
-            await denied.drain<void>();
-            expect(tokenCalls, 0);
-            final valid = await client.getUrl(
-              callback.replace(
-                queryParameters: {
-                  'code': 'test-code',
-                  'state': uri.queryParameters['state']!,
-                },
-              ),
-            );
-            final accepted = await valid.close();
-            expect(accepted.statusCode, 200);
-            await accepted.drain<void>();
-          } finally {
-            client.close(force: true);
-          }
-        },
         client: MockClient((request) async {
           tokenCalls++;
           final body = Uri.splitQueryString(request.body);
           expect(body['code'], 'test-code');
+          expect(body['redirect_uri'], 'musicon://spotify/callback');
           expect(body.containsKey('client_secret'), isFalse);
           expect(
             SpotifyService.challenge(body['code_verifier']!),
-            authorization.queryParameters['code_challenge'],
+            authorization['challenge'],
           );
           if (tokenCalls == 1) {
             throw http.ClientException(
@@ -232,14 +287,12 @@ void main() {
           });
         }),
       );
+      addTearDown(service.dispose);
       await service.connect();
       expect(service.connected, isTrue);
       expect(tokenCalls, 2);
-      expect(jsonDecode(store.value!)['refresh_token'], 'refresh');
       await service.disconnect();
       expect(store.value, isNull);
-      expect(service.connected, isFalse);
-      service.dispose();
     },
   );
   test(

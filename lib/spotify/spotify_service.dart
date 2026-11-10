@@ -47,21 +47,13 @@ class SpotifyService extends ChangeNotifier {
     ),
     http.Client? client,
     this.store = const SecureSpotifyStore(),
-    Future<void> Function(Uri)? openBrowser,
   }) : _client =
            client ??
-           (Platform.isAndroid ? AndroidSpotifyClient() : http.Client()),
-       _openBrowser =
-           openBrowser ??
-           ((uri) => const MethodChannel(
-             'musicon/app',
-           ).invokeMethod<void>('spotifyAuthorize', {'url': uri.toString()}));
+           (Platform.isAndroid ? AndroidSpotifyClient() : http.Client());
   final String clientId;
   final http.Client _client;
   final SpotifySessionStore store;
-  final Future<void> Function(Uri) _openBrowser;
   Map<String, dynamic>? _session;
-  HttpServer? _server;
   Future<void>? _refreshing;
   VoidCallback? _cancelLogin;
   int _epoch = 0;
@@ -127,96 +119,13 @@ class SpotifyService extends ChangeNotifier {
         'A conexão Spotify ainda precisa ser ativada para o MusicON.',
       );
     }
-    if (_server != null || _appConnecting) {
+    if (_appConnecting) {
       throw const SourceException('Uma conexão já está em andamento.');
     }
-    if (useSpotifyApp) return _connectWithApp();
-    final epoch = ++_epoch;
-    final verifier = _random(), state = _random();
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8888);
-    _server = server;
-    final redirect = 'http://127.0.0.1:${server.port}/callback';
-    final completed = Completer<String>();
-    final subscription = server.listen((request) async {
-      if (request.method != 'GET' ||
-          request.uri.path != '/callback' ||
-          request.uri.queryParameters['state'] != state) {
-        request.response.statusCode = 400;
-        request.response.write('Retorno invalido.');
-        await request.response.close();
-        return;
-      }
-      final code = request.uri.queryParameters['code'];
-      request.response.headers.contentType = ContentType.html;
-      request.response.write(
-        '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Voltar ao MusicON</title>'
-        '<body style="background:#0e0c13;color:#eee;font:18px sans-serif;padding:32px"><h1>Continue no MusicON</h1>'
-        '<p>Recebemos o retorno do Spotify. O aplicativo vai concluir a conexão.</p>'
-        '<a style="display:inline-block;background:#b99aff;color:#261b40;padding:18px;border-radius:24px;text-decoration:none" href="intent://spotify/return#Intent;scheme=musicon;package=com.musicon.musicon.prototype;end">Abrir MusicON</a>'
-        '<p>Se o aplicativo não abrir automaticamente, toque no botão acima.</p></body></html>',
-      );
-      await request.response.close();
-      if (completed.isCompleted) return;
-      if (code == null || request.uri.queryParameters.containsKey('error')) {
-        completed.completeError(
-          const SourceException('A conexão com o Spotify foi cancelada.'),
-        );
-      } else {
-        completed.complete(code);
-      }
-    });
-    // Attach the timeout/error handler before opening the browser.
-    final timer = Timer(const Duration(minutes: 3), () {
-      if (!completed.isCompleted) {
-        completed.completeError(
-          const SourceException('O login demorou demais. Tente novamente.'),
-        );
-      }
-    });
-    _cancelLogin = () {
-      if (!completed.isCompleted) {
-        completed.completeError(const SourceException('Conexão cancelada.'));
-      }
-    };
-    final codeResult = completed.future;
-    unawaited(
-      codeResult.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
-    );
-    try {
-      await _openBrowser(
-        Uri.https('accounts.spotify.com', '/authorize', {
-          'response_type': 'code',
-          'client_id': clientId,
-          'redirect_uri': redirect,
-          'scope': 'playlist-read-private playlist-read-collaborative',
-          'code_challenge_method': 'S256',
-          'code_challenge': challenge(verifier),
-          'state': state,
-        }),
-      );
-      final code = await codeResult;
-      if (Platform.isAndroid) {
-        try {
-          await const MethodChannel(
-            'musicon/app',
-          ).invokeMethod<void>('spotifyReturn');
-        } on PlatformException {
-          // The browser page also offers an explicit return button.
-        } on MissingPluginException {
-          // Non-Android test hosts do not have this method.
-        }
-      }
-      await _exchangeCode(code, redirect, verifier, epoch);
-    } finally {
-      timer.cancel();
-      _cancelLogin = null;
-      await subscription.cancel();
-      await server.close(force: true);
-      if (identical(_server, server)) _server = null;
-    }
+    return _connectAndroid(useSpotifyApp: useSpotifyApp);
   }
 
-  Future<void> _connectWithApp() async {
+  Future<void> _connectAndroid({required bool useSpotifyApp}) async {
     _appConnecting = true;
     final epoch = ++_epoch;
     final verifier = _random(), state = _random();
@@ -230,13 +139,16 @@ class SpotifyService extends ChangeNotifier {
     };
     try {
       final response = await channel
-          .invokeMapMethod<String, dynamic>('spotifyAppAuthorize', {
-            'clientId': clientId,
-            'state': state,
-            'verifier': verifier,
-            'challenge': challenge(verifier),
-          })
-          .timeout(const Duration(minutes: 3));
+          .invokeMapMethod<String, dynamic>(
+            useSpotifyApp ? 'spotifyAppAuthorize' : 'spotifyBrowserAuthorize',
+            {
+              'clientId': clientId,
+              'state': state,
+              'verifier': verifier,
+              'challenge': challenge(verifier),
+            },
+          )
+          .timeout(const Duration(minutes: 10));
       if (response == null ||
           response['state'] != state ||
           response['code'] is! String) {
@@ -254,13 +166,15 @@ class SpotifyService extends ChangeNotifier {
       throw SourceException(
         error.code == 'cancelled'
             ? 'A conexão com o Spotify foi cancelada.'
-            : 'Não foi possível conectar pelo aplicativo Spotify. Confira se ele está atualizado ou use a opção Pelo navegador.',
+            : useSpotifyApp
+            ? 'Não foi possível conectar pelo aplicativo Spotify. Confira se ele está atualizado ou use a opção Pelo navegador.'
+            : 'Não foi possível concluir o login no navegador. Volte ao MusicON e tente conectar novamente.',
       );
     } on TimeoutException {
       throw const SourceException('O login demorou demais. Tente novamente.');
     } on MissingPluginException {
       throw const SourceException(
-        'Use Pelo navegador para conectar neste aparelho.',
+        'Atualize o MusicON para conectar ao Spotify neste aparelho.',
       );
     } finally {
       _cancelLogin = null;
@@ -423,6 +337,11 @@ class SpotifyService extends ChangeNotifier {
       return _get(uri, retry: false);
     }
     if (response.statusCode == 403) {
+      if (uri.path == '/v1/me/playlists') {
+        throw const SourceException(
+          'O Spotify bloqueou a consulta às playlists. Confira se a conta responsável pelo cadastro do MusicON tem Spotify Premium e se sua conta está na lista de usuários autorizados.',
+        );
+      }
       throw const SourceException(
         'O Spotify não permitiu acesso. Confira se sua conta está autorizada no MusicON e se a playlist pertence a você.',
       );
@@ -541,7 +460,6 @@ class SpotifyService extends ChangeNotifier {
   void dispose() {
     cancelConnect();
     _disposed = true;
-    _server?.close(force: true);
     _client.close();
     super.dispose();
   }

@@ -8,11 +8,15 @@ Player Android em Flutter com identidade própria, busca online, músicas do apa
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
-## Versão 0.7.1
+## Versão 0.7.2
+
+- Os dois modos de login Spotify usam retorno direto ao Android por `musicon://spotify/callback`, sem servidor HTTP em segundo plano.
+- Corrigido o caso em que o Android congelava o MusicON enquanto o navegador estava aberto e o retorno ficava sem resposta.
+- Acesso negado ao listar playlists agora orienta conferir Premium na conta responsável pelo cadastro e a lista de usuários autorizados.
 
 - Conexão HTTPS com Spotify pelo cliente nativo Android com OkHttp, sem usar os sockets do Dart.
 - Escolha entre login pelo aplicativo Spotify compatível instalado e pelo navegador. O login nativo usa Spotify Android Auth 5.0.0 com PKCE e precisa do cadastro Android descrito no guia.
-- Retorno do navegador tenta trazer o MusicON para a frente e oferece um botão Abrir MusicON como alternativa.
+- O retorno do navegador reabre a Activity do MusicON; a autorização antiga deve ser fechada após atualizar.
 - Falhas temporárias de DNS na conexão e nas consultas ao Spotify recebem até duas novas tentativas, com intervalo curto.
 - Falhas persistentes mostram orientação de rede em português e permitem tentar conectar novamente. A sessão já salva é preservada quando a rede falha; respostas HTTP e timeouts não são repetidos automaticamente.
 
@@ -27,7 +31,7 @@ Player Android em Flutter com identidade própria, busca online, músicas do apa
 - Seis cores salvas por usuário no aparelho: violeta, azul, verde, rosa, dourado e coral.
 - Consulta à última Release pública no GitHub e opção de verificar novidades ao abrir.
 - Download completo de músicas ou de uma coleção para ouvir offline.
-- Integração opcional de playlists Spotify configurada com o Client ID público do MusicON e retorno `http://127.0.0.1:8888/callback`.
+- Integração opcional de playlists Spotify configurada com o Client ID público do MusicON e retorno `musicon://spotify/callback`.
 
 ## Músicas do celular
 
@@ -53,7 +57,7 @@ Os endereços temporários de mídia são resolvidos quando necessários e não 
 
 Abra **Biblioteca > Importar do Spotify** ou **Configurações > Spotify**. A integração usa a API oficial para ler as playlists autorizadas pela conta, inclusive por link quando acessível. O usuário escolhe as versões encontradas no MusicON antes de salvar uma coleção, na ordem original. A importação pode ser parcial, e a versão escolhida pode ser diferente da gravação listada no Spotify.
 
-**O Client ID público foi configurado no APK 0.7.0.** A opção Conectar ao Spotify abre o login no navegador e usa o redirecionamento `http://127.0.0.1:8888/callback`, aceito no cadastro do projeto. O fluxo foi testado com retorno real em loopback e respostas simuladas da API; a conexão com uma conta Spotify real ainda precisa ser concluída pelo usuário. Não é necessário conectar para usar o restante do app.
+**O Client ID público foi configurado no APK 0.7.0.** Desde 0.7.2, os dois modos usam `musicon://spotify/callback`, aceito no cadastro do projeto. O navegador retorna diretamente ao Android, que reabre o MusicON mesmo após congelamento em segundo plano. O acesso às playlists continua sujeito ao cadastro, à conta autorizada e ao Premium da conta responsável pelo aplicativo. Não é necessário conectar para usar o restante do app.
 
 O código utiliza Authorization Code com PKCE S256, valida `state`, guarda tokens cifrados com uma chave do Android Keystore, renova a sessão e permite desconectar. Não há Client Secret no APK. A integração fornece a lista de faixas, não arquivos de áudio do Spotify. O offline utiliza a fonte das versões que o usuário selecionou no MusicON.
 
@@ -77,7 +81,9 @@ Os APKs atuais usam a mesma chave local de desenvolvimento das entregas anterior
 
 ## Validação
 
-A análise estática passou sem problemas e os **52 testes automatizados** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação e integração Spotify. Os testes de API simulam as respostas externas; isso não substitui um login real.
+A análise estática passou sem problemas e os **54 testes automatizados** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação e integração Spotify. Os testes de API simulam as respostas externas; isso não substitui um login real.
+
+Na versão 0.7.2, o teste de retorno colocou explicitamente o processo do MusicON no estado `isFrozen=true` com o navegador em primeiro plano. O deep link reabriu o app, um retorno com estado incorreto foi ignorado e o código de teste com estado válido foi entregue ao login pendente. O teste não solicitou aprovação de uma conta Spotify nem armazenou tokens reais. O bloqueio de Web API por ausência de Premium no cadastro foi confirmado pelo aviso do painel enviado pelo usuário; a atualização não remove essa exigência externa.
 
 Na versão 0.7.1, o ensaio de rede Android alcançou os endpoints oficiais de token e playlists por HTTPS, recebendo 400/401 com credenciais de teste inválidas. O canal nativo rejeitou outro domínio. Um retorno de autorização simulado, aberto no Chrome do emulador, trouxe o MusicON para a frente. O emulador não possui Spotify instalado; o login nativo foi verificado com respostas simuladas e ainda precisa de teste em aparelho com Spotify e cadastro Android concluído.
 

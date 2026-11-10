@@ -6,28 +6,57 @@ import android.os.Build
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import com.spotify.sdk.android.auth.AuthorizationClient
 import com.spotify.sdk.android.auth.AuthorizationRequest
 import com.spotify.sdk.android.auth.AuthorizationResponse
+import com.spotify.sdk.android.auth.IntentExtras
+import com.spotify.sdk.android.auth.LoginActivity
 import com.spotify.sdk.android.auth.PKCEInformation
 import com.spotify.sdk.android.auth.app.SpotifyNativeAuthUtil
 
 class MainActivity : AudioServiceActivity() {
     private var spotifyResult: MethodChannel.Result? = null
-    private val spotifyRequest = 8201
+    private var spotifyState: String? = null
+    private var spotifyViaApp = false
+    private val spotifyRequest = LoginActivity.REQUEST_CODE
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val uri = intent.data ?: return
+        if (uri.scheme != "musicon" || uri.host != "spotify" || uri.path != "/callback") return
+        if (spotifyResult == null || uri.getQueryParameter("state") != spotifyState) return
+        if (uri.getQueryParameter("error") != null) {
+            completeSpotifyError("cancelled")
+        } else {
+            completeSpotifyCode(uri.getQueryParameter("code"), uri.getQueryParameter("state"))
+        }
+    }
+
+    private fun completeSpotifyError(code: String) {
+        val pending = spotifyResult
+        spotifyResult = null; spotifyState = null
+        pending?.error(code, "Nao foi possivel concluir a conexao Spotify.", null)
+    }
+
+    private fun completeSpotifyCode(code: String?, state: String?) {
+        if (state != spotifyState || code.isNullOrBlank() || code.length > 4096) {
+            completeSpotifyError("invalid_auth"); return
+        }
+        val pending = spotifyResult
+        spotifyResult = null; spotifyState = null
+        pending?.success(mapOf("code" to code, "state" to state))
+    }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != spotifyRequest) return
-        val pending = spotifyResult ?: return
-        spotifyResult = null
-        val response = AuthorizationClient.getResponse(resultCode, data)
-        when (response.type) {
-            AuthorizationResponse.Type.CODE -> pending.success(mapOf("code" to response.code, "state" to response.state))
-            AuthorizationResponse.Type.CANCELLED -> pending.error("cancelled", "Conexao cancelada.", null)
-            else -> pending.error("spotify_auth", "O Spotify nao autorizou a conexao pelo aplicativo.", null)
+        if (spotifyResult == null || !spotifyViaApp) return
+        if (resultCode == RESULT_CANCELED) { completeSpotifyError("cancelled"); return }
+        val reply = data?.getBundleExtra(LoginActivity.EXTRA_REPLY)
+        if (resultCode != RESULT_OK || reply?.getString(IntentExtras.KEY_RESPONSE_TYPE) != LoginActivity.RESPONSE_TYPE_CODE) {
+            completeSpotifyError("spotify_auth"); return
         }
+        completeSpotifyCode(reply.getString(IntentExtras.KEY_AUTHORIZATION_CODE), reply.getString(IntentExtras.KEY_STATE))
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -45,14 +74,15 @@ class MainActivity : AudioServiceActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "spotifyAppAvailable" -> result.success(SpotifyNativeAuthUtil.isSpotifyInstalled(this))
-                    "spotifyAppAuthorize" -> {
+                    "spotifyAppAuthorize", "spotifyBrowserAuthorize" -> {
+                        val useApp = call.method == "spotifyAppAuthorize"
                         val clientId = call.argument<String>("clientId").orEmpty()
                         val verifier = call.argument<String>("verifier").orEmpty()
                         val challenge = call.argument<String>("challenge").orEmpty()
                         val state = call.argument<String>("state").orEmpty()
                         if (spotifyResult != null || !clientId.matches(Regex("[a-fA-F0-9]{32}")) || verifier.length !in 43..128 || challenge.length != 43 || state.length !in 43..128) {
                             result.error("invalid_auth", "Solicitacao de conexao invalida.", null)
-                        } else if (!SpotifyNativeAuthUtil.isSpotifyInstalled(this)) {
+                        } else if (useApp && !SpotifyNativeAuthUtil.isSpotifyInstalled(this)) {
                             result.error("not_installed", "Spotify compativel nao encontrado.", null)
                         } else try {
                             val request = AuthorizationRequest.Builder(clientId, AuthorizationResponse.Type.CODE, "musicon://spotify/callback")
@@ -61,17 +91,31 @@ class MainActivity : AudioServiceActivity() {
                                 .setPkceInformation(PKCEInformation.sha256(verifier, challenge))
                                 .build()
                             spotifyResult = result
-                            AuthorizationClient.openLoginActivity(this, spotifyRequest, request)
+                            spotifyState = state
+                            spotifyViaApp = useApp
+                            if (useApp) {
+                                // Official SDK utility verifies Spotify's signature and passes PKCE.
+                                // The reply is received directly instead of a second SDK activity.
+                                if (!SpotifyNativeAuthUtil(this, request).startAuthActivity()) {
+                                    completeSpotifyError("not_installed")
+                                }
+                            } else {
+                                val debugProbe = call.argument<Boolean>("probeOnly") == true &&
+                                    (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                                // Opt-in debug probe never authorizes an actual Spotify account.
+                                val uri = if (debugProbe) Uri.parse("https://example.com/") else request.toUri()
+                                startActivity(Intent(Intent.ACTION_VIEW, uri))
+                            }
                         } catch (_: Exception) {
-                            spotifyResult = null
+                            spotifyResult = null; spotifyState = null
                             result.error("spotify_auth", "Nao foi possivel abrir a conexao Spotify.", null)
                         }
                     }
                     "spotifyAppCancel" -> {
                         val pending = spotifyResult
-                        spotifyResult = null
+                        spotifyResult = null; spotifyState = null
                         if (pending != null) {
-                            AuthorizationClient.stopLoginActivity(this, spotifyRequest)
+                            if (spotifyViaApp) finishActivity(spotifyRequest)
                             pending.error("cancelled", "Conexao cancelada.", null)
                         }
                         result.success(null)

@@ -4,20 +4,24 @@ O login é opcional. O aplicativo lê metadados das playlists autorizadas pela c
 
 ## Situação desta entrega
 
-O Client ID público informado para o MusicON foi configurado a partir da versão 0.7.0. O retorno é **`http://127.0.0.1:8888/callback`**, confirmado como aceito no painel. O fluxo de login, armazenamento seguro, paginação e importação está implementado e testado; uma conexão real depende do usuário completar o login em uma conta autorizada. Não há simulação de conta conectada.
+O Client ID público informado para o MusicON foi configurado a partir da versão 0.7.0. Desde a versão 0.7.2, os dois modos de login usam **`musicon://spotify/callback`**, já aceito no painel do projeto. O Android recebe o retorno e reabre o MusicON; não há dependência de servidor HTTP dentro do aplicativo.
+
+No emulador, a versão anterior foi observada congelada pelo Android em segundo plano, com o servidor de retorno sem responder. O novo caminho permite que o sistema descongele e traga o MusicON para a frente. Ao atualizar, feche a autorização antiga no navegador e inicie uma tentativa nova. O retorno antigo `http://127.0.0.1:8888/callback` pode continuar cadastrado para versões anteriores.
+
+O aviso do painel de que a Web API está bloqueada por falta de Premium é um bloqueio independente do retorno de login. A conta responsável pelo cadastro precisa atender à exigência do Spotify. Trocar apenas a conta que entra no MusicON não elimina esse requisito.
 
 ## Cadastro necessário
 
 1. Entre no [Spotify for Developers](https://developer.spotify.com/dashboard) com a conta responsável pelo aplicativo.
 2. Cadastre o MusicON com a Web API.
-3. Cadastre o redirecionamento **`http://127.0.0.1:8888/callback`**. O app usa a porta 8888 no próprio aparelho. Essa forma com porta explícita foi aceita no painel usado neste projeto. Não use `localhost`.
+3. Cadastre o redirecionamento **`musicon://spotify/callback`**. Desde 0.7.2, esse é o endereço usado tanto pelo navegador quanto pelo aplicativo Spotify.
 4. Informe a política de privacidade pública: `https://github.com/lenonronaldo2014-prog/MusicON/blob/main/docs/privacy.md`.
 5. Envie ao responsável pela compilação somente o **Client ID público**. Não envie Client Secret, senha nem tokens.
 6. Em Users Management, adicione as contas de teste permitidas.
 
 O Client ID é o identificador público gerado no cadastro. A exigência paga documentada para desenvolvimento é a conta Premium do responsável, não uma chave a comprar separadamente. No modo de desenvolvimento atual, o responsável pelo cadastro precisa de Spotify Premium e há limite de cinco contas autenticadas na lista de autorizados. Playlists de terceiros podem fornecer apenas metadados, sem o conteúdo; a importação depende do acesso que a API concede à conta. Não há tentativa de contornar essa restrição.
 
-## Login pelo aplicativo Spotify (versão 0.7.1)
+## Escolher o modo de login
 
 O botão Conectar ao Spotify permite escolher **Pelo aplicativo Spotify** ou **Pelo navegador**. A opção de aplicativo só fica ativa quando a biblioteca oficial reconhece um Spotify compatível e com assinatura válida no aparelho. O fluxo usa Authorization Code com PKCE, valida o estado e utiliza o armazenamento cifrado existente. Cancelar não conecta a conta. O navegador continua disponível.
 
@@ -28,7 +32,9 @@ Para habilitar a autorização nativa no cadastro do MusicON, em Settings no pai
 3. Cadastre a impressão SHA-1 da assinatura usada nestes APKs: **`86:93:7C:70:1D:8D:69:0E:5D:97:00:BF:10:6E:69:AE:87:37:21:31`**.
 4. Salve. Se a assinatura do APK mudar no futuro, atualize também esse cadastro.
 
-Sem esse cadastro adicional, prefira Pelo navegador, que mantém o endereço de retorno já autorizado. A biblioteca é Spotify Android Auth 5.0.0. No fluxo nativo, o resultado volta pela Activity; no navegador, o retorno loopback tenta trazer o MusicON à frente e mostra **Abrir MusicON** para os navegadores que impedem abertura automática. Nenhum código ou token é colocado nesse botão de retorno.
+O navegador precisa do endereço `musicon://spotify/callback` cadastrado. O pacote Android e a assinatura são utilizados para a autorização pelo aplicativo Spotify. A biblioteca Spotify Android Auth 5.0.0 verifica a instalação e a assinatura do Spotify; seu utilitário nativo entrega o resultado diretamente à Activity do MusicON. Pelo navegador, o mesmo endereço de retorno é tratado pela MainActivity do MusicON, sem uma segunda Activity receptora ou servidor loopback. O fluxo aceita somente um login em andamento e valida o estado antes de entregar o código.
+
+O login pode aguardar até dez minutos. Cancelar invalida a tentativa. Se o Android encerrar completamente o processo do MusicON durante o login, abra o app e conecte novamente; o retorno de uma tentativa encerrada não cria sessão.
 
 ## Compilar com o cadastro
 
