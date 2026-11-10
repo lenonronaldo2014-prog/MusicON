@@ -6,6 +6,8 @@ Player Android e Windows em Flutter com identidade própria, busca online, músi
 
 [Versão Windows e instalação](docs/windows.md)
 
+<img src="docs/images/windows.png" width="960" alt="MusicON no Windows com navegação lateral e a tela inicial original">
+
 <img src="docs/images/inicio-atual.png" width="280" alt="Tela inicial do MusicON com músicas da coleção"> <img src="docs/images/configuracoes.png" width="280" alt="Configurações de cores e atualizações">
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
