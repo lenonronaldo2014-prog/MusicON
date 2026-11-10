@@ -24,7 +24,13 @@ Você pode usar Desconectar na tela do Spotify para apagar a sessão. As listas 
 
 A integração não baixa arquivos de áudio do Spotify. As versões escolhidas na busca do MusicON usam sua própria fonte para reprodução e download.
 
-## Atualizações
+## Diagnóstico local
+
+A partir de 0.7.3, registros técnicos de falhas ficam no armazenamento privado do app, limitados aos oito eventos mais recentes. Contêm versão, horário, tipo de erro e posições no código; não guardam a mensagem original da exceção, URLs, tokens, senha, contas ou nomes de músicas. O relatório inclui fabricante, modelo, versão do Android e, quando disponível a partir do Android 11, até cinco motivos de encerramento informados pelo sistema. Não acessa o histórico de outros aplicativos.
+
+Nada é enviado automaticamente. Em Configurações > Diagnóstico de problemas, você pode visualizar e copiar o relatório para compartilhar por sua própria ação. Desinstalar o app remove os registros locais junto com os demais dados privados.
+
+## Consulta de atualizações
 
 A busca de atualizações consulta a API pública do GitHub. A consulta ocorre quando você toca em Buscar atualizações ou, se tiver habilitado essa opção, quando abre o aplicativo. GitHub recebe o IP e os dados técnicos usuais da conexão. O MusicON não inclui tokens de acesso ao GitHub no aplicativo.
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'app_preferences.dart';
+import 'diagnostics_service.dart';
 import 'update_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -22,6 +24,75 @@ class _SettingsPageState extends State<SettingsPage> {
   ReleaseInfo? available;
   bool checking = false;
   String? status;
+  bool readingDiagnostics = false;
+
+  Future<void> _copyDiagnostics(String report) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: report));
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Diagnóstico copiado.')));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível copiar o diagnóstico.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _diagnostics() async {
+    setState(() => readingDiagnostics = true);
+    try {
+      final report = await const DiagnosticsService().read();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Diagnóstico local'),
+          scrollable: true,
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Versão, modelo do celular e registros de falhas. Nada é enviado automaticamente. Após um fechamento, copie este relatório para ajudar na correção.',
+              ),
+              const SizedBox(height: 16),
+              SelectableText(report, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar'),
+            ),
+            FilledButton.icon(
+              onPressed: () => _copyDiagnostics(report),
+              icon: const Icon(Icons.copy),
+              label: const Text('Copiar'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível ler o diagnóstico. Tente novamente.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => readingDiagnostics = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -193,6 +264,17 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 16),
           const Text(
             'A nova versão abre no navegador. Depois do download, o Android orienta a instalação. Suas músicas e playlists continuam salvas ao atualizar.',
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.bug_report_outlined),
+            title: const Text('Diagnóstico de problemas'),
+            subtitle: const Text(
+              'Copiar informações após um fechamento inesperado',
+            ),
+            onTap: readingDiagnostics ? null : _diagnostics,
           ),
         ],
       ),

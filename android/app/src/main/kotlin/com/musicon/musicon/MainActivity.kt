@@ -73,6 +73,17 @@ class MainActivity : AudioServiceActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "musicon/app")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "diagnosticsRead" -> {
+                        try { result.success(CrashDiagnostics.report(applicationContext)) }
+                        catch (_: Exception) { result.error("diagnostics", "Nao foi possivel ler o diagnostico.", null) }
+                    }
+                    "diagnosticsRecord" -> {
+                        try {
+                            CrashDiagnostics.record(applicationContext, call.argument<String>("source").orEmpty(),
+                                call.argument<String>("type").orEmpty(), call.argument<List<String>>("frames") ?: emptyList())
+                            result.success(null)
+                        } catch (_: Exception) { result.error("diagnostics", "Nao foi possivel registrar o diagnostico.", null) }
+                    }
                     "spotifyAppAvailable" -> result.success(SpotifyNativeAuthUtil.isSpotifyInstalled(this))
                     "spotifyAppAuthorize", "spotifyBrowserAuthorize" -> {
                         val useApp = call.method == "spotifyAppAuthorize"

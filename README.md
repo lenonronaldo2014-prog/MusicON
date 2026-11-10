@@ -8,7 +8,12 @@ Player Android em Flutter com identidade própria, busca online, músicas do apa
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
-## Versão 0.7.2
+## Versão 0.7.3
+
+- Corrigida a leitura de respostas da busca em Android anterior ao 13: a chamada `InputStream.readNBytes`, ainda presente no DEX anterior, foi substituída por leitura limitada compatível com Android 7+.
+- Falhas de compatibilidade do extrator são apresentadas na tela em vez de encerrar o processo por `LinkageError`.
+- Configurações > Diagnóstico de problemas permite copiar um relatório local com versão, modelo, Android, erros técnicos e motivos de encerramento registrados pelo sistema (Android 11+).
+- O diagnóstico não armazena mensagens de exceção, URLs, senhas, tokens ou nomes de músicas. Não há envio automático.
 
 - Os dois modos de login Spotify usam retorno direto ao Android por `musicon://spotify/callback`, sem servidor HTTP em segundo plano.
 - Corrigido o caso em que o Android congelava o MusicON enquanto o navegador estava aberto e o retorno ficava sem resposta.
@@ -81,7 +86,9 @@ Os APKs atuais usam a mesma chave local de desenvolvimento das entregas anterior
 
 ## Validação
 
-A análise estática passou sem problemas e os **54 testes automatizados** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação e integração Spotify. Os testes de API simulam as respostas externas; isso não substitui um login real.
+A análise estática passou sem problemas. Os **57 testes Flutter e 4 testes nativos da leitura limitada** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação, integração Spotify e diagnóstico local. Os testes de API simulam as respostas externas; isso não substitui um login real.
+
+O registro nativo foi validado com um encerramento controlado pelo ADB no emulador: o relatório preservou a classe da exceção e as posições de código, delegando ao tratamento original do Android. Esse encerramento foi provocado para teste; a causa dos fechamentos no celular do amigo do usuário ainda não foi confirmada. Após um novo fechamento, reabra o app e copie o relatório em Configurações > Diagnóstico de problemas. Em Android anterior ao 11, o histórico de encerramentos do sistema não está disponível; os registros próprios permanecem disponíveis quando puderem ser salvos.
 
 Na versão 0.7.2, o teste de retorno colocou explicitamente o processo do MusicON no estado `isFrozen=true` com o navegador em primeiro plano. O deep link reabriu o app, um retorno com estado incorreto foi ignorado e o código de teste com estado válido foi entregue ao login pendente. O teste não solicitou aprovação de uma conta Spotify nem armazenou tokens reais. O bloqueio de Web API por ausência de Premium no cadastro foi confirmado pelo aviso do painel enviado pelo usuário; a atualização não remove essa exigência externa.
 

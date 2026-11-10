@@ -10,7 +10,7 @@
     <application
         android:label="MusicON"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:name="${applicationName}"
+        android:name="com.musicon.musicon.MusicOnApplication"
         android:icon="@drawable/ic_launcher_musicon">
         <service android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"

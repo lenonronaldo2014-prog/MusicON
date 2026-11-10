@@ -18,10 +18,12 @@ import 'online_services.dart';
 import 'spotify/spotify_service.dart';
 import 'models.dart';
 import 'device_audio_service.dart';
+import 'diagnostics_service.dart';
 import 'downloads/download_job.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  const DiagnosticsService().install();
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.musicon.prototype.playback',
     androidNotificationChannelName: 'Reprodução MusicON',

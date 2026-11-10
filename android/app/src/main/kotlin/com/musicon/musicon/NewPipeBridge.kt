@@ -60,6 +60,9 @@ class NewPipeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
                     else -> "A fonte não disponibilizou este áudio. O conteúdo pode estar restrito ou o extrator precisar de atualização."
                 }
                 main.post { if (attached) result.error("extraction_failed", message, e.javaClass.simpleName) }
+            } catch (e: LinkageError) {
+                Log.w("MusicONExtractor", "Unsupported API: ${e.javaClass.simpleName}")
+                main.post { if (attached) result.error("compatibility", "A fonte encontrou uma incompatibilidade neste Android. Atualize o MusicON e tente novamente.", e.javaClass.simpleName) }
             }
         }
     }
@@ -123,8 +126,7 @@ private class ExtractorDownloader : Downloader() {
             }
             val status = connection.responseCode
             val input = if (status >= 400) connection.errorStream else connection.inputStream
-            val bytes = input?.use { it.readNBytes(8 * 1024 * 1024 + 1) } ?: ByteArray(0)
-            if (bytes.size > 8 * 1024 * 1024) throw IOException("Response too large")
+            val bytes = input?.use { it.readLimited(8 * 1024 * 1024) } ?: ByteArray(0)
             val headers = connection.headerFields.filterKeys { it != null }
             return Response(status, connection.responseMessage, headers,
                 String(bytes, Charsets.UTF_8), connection.url.toString())
