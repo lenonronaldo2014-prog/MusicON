@@ -4,7 +4,7 @@ Set-Location -LiteralPath $project
 if (-not $env:JAVA_HOME) { throw 'JAVA_HOME deve apontar para um JDK 21 Windows.' }
 $support=Join-Path $project 'windows/support'
 New-Item -ItemType Directory -Force -Path $support | Out-Null
-& (Join-Path $project 'android/gradlew.bat') -p (Join-Path $project 'desktop/extractor') bundle --console=plain
+& (Join-Path $project 'desktop/extractor/gradlew.bat') -p (Join-Path $project 'desktop/extractor') bundle --console=plain
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao compilar a busca.' }
 Copy-Item -LiteralPath 'desktop/extractor/build/libs/musicon-extractor.jar' -Destination $support
 $runtime=Join-Path $support 'runtime'
