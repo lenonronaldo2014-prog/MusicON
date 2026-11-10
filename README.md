@@ -2,7 +2,7 @@
 
 Player Android e Windows em Flutter com identidade própria, busca online, músicas locais, favoritos, playlists, temas e atualização pelo GitHub.
 
-[Baixar APK](https://github.com/lenonronaldo2014-prog/MusicON/releases/latest) · [Configurar Spotify](docs/spotify-setup.md) · [Privacidade](docs/privacy.md)
+[Baixar para Android ou Windows](https://github.com/lenonronaldo2014-prog/MusicON/releases/latest) · [Configurar Spotify](docs/spotify-setup.md) · [Privacidade](docs/privacy.md)
 
 [Versão Windows e instalação](docs/windows.md)
 
@@ -94,7 +94,7 @@ Os APKs atuais usam a mesma chave local de desenvolvimento das entregas anterior
 
 ## Validação
 
-A análise estática passou sem problemas. Os **57 testes Flutter e 4 testes nativos da leitura limitada** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações, downloads incompletos, remoção de arquivos, recuperação, integração Spotify e diagnóstico local. Os testes de API simulam as respostas externas; isso não substitui um login real.
+A análise estática passou sem problemas. Os **62 testes Flutter e 4 testes nativos da leitura limitada** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações por plataforma, downloads incompletos, remoção de arquivos, recuperação, integração Spotify, diagnóstico local, pastas do Windows e proteção da sessão por DPAPI. Os testes de API simulam as respostas externas; isso não substitui um login real.
 
 O registro nativo foi validado com um encerramento controlado pelo ADB no emulador: o relatório preservou a classe da exceção e as posições de código, delegando ao tratamento original do Android. Esse encerramento foi provocado para teste; a causa dos fechamentos no celular do amigo do usuário ainda não foi confirmada. Após um novo fechamento, reabra o app e copie o relatório em Configurações > Diagnóstico de problemas. Em Android anterior ao 11, o histórico de encerramentos do sistema não está disponível; os registros próprios permanecem disponíveis quando puderem ser salvos.
 

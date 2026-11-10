@@ -91,6 +91,25 @@ void main() {
       service.dispose();
     },
   );
+  test('updates choose the installer on Windows and APK on Android', () async {
+    final body = release(tag: 'v0.8.0');
+    (body['assets'] as List).add({
+      'name': 'MusicON-Setup.exe',
+      'browser_download_url':
+          'https://github.com/$githubRepository/releases/download/v0.8.0/MusicON-Setup.exe',
+    });
+    for (final desktop in [false, true]) {
+      final service = UpdateService(
+        desktop: desktop,
+        client: MockClient((_) async => http.Response(jsonEncode(body), 200)),
+      );
+      expect(
+        (await service.check())!.download.pathSegments.last,
+        desktop ? 'MusicON-Setup.exe' : 'MusicON.apk',
+      );
+      service.dispose();
+    }
+  });
   testWidgets(
     'settings changes whole app theme and opens checked update download',
     (tester) async {
