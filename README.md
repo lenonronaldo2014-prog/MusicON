@@ -96,6 +96,8 @@ Os APKs atuais usam a mesma chave local de desenvolvimento das entregas anterior
 
 ## Validação
 
+Na versão 0.8.0, o pacote Windows x64 foi compilado pelo workflow e executado no Windows. A conferência do executável exportou a tela inicial, recebeu 20 resultados reais da busca e confirmou avanço de reprodução local e online sem erro do player. O instalador foi executado com sucesso e instalou a versão 0.8.0+12. O APK 0.8.0 também foi instalado no emulador: a reprodução online chegou a 17.086 ms antes de pausar, sem erro registrado. Isso não mede a qualidade de áudio de cada dispositivo nem substitui testar um login real do Spotify.
+
 A análise estática passou sem problemas. Os **62 testes Flutter e 4 testes nativos da leitura limitada** passaram. Eles cobrem a biblioteca, filas, armazenamento, temas, atualizações por plataforma, downloads incompletos, remoção de arquivos, recuperação, integração Spotify, diagnóstico local, pastas do Windows e proteção da sessão por DPAPI. Os testes de API simulam as respostas externas; isso não substitui um login real.
 
 O registro nativo foi validado com um encerramento controlado pelo ADB no emulador: o relatório preservou a classe da exceção e as posições de código, delegando ao tratamento original do Android. Esse encerramento foi provocado para teste; a causa dos fechamentos no celular do amigo do usuário ainda não foi confirmada. Após um novo fechamento, reabra o app e copie o relatório em Configurações > Diagnóstico de problemas. Em Android anterior ao 11, o histórico de encerramentos do sistema não está disponível; os registros próprios permanecem disponíveis quando puderem ser salvos.
