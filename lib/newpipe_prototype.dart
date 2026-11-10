@@ -29,8 +29,15 @@ class VideoResult {
 }
 
 class NewPipeSource {
-  NewPipeSource({this.channel = const MethodChannel('musicon/newpipe')});
+  NewPipeSource({
+    this.channel = const MethodChannel('musicon/newpipe'),
+    this.backend,
+  });
   final MethodChannel channel;
+  final Future<Object?> Function(String method, String value)? backend;
+  Future<Object?> _invoke(String method, String value) =>
+      backend?.call(method, value) ??
+      channel.invokeMethod<Object?>(method, {'value': value});
   Map<String, String> _headers = {};
   AudioSource audioSource(Track track, MediaItem tag) =>
       track.providerId == 'youtube'
@@ -50,10 +57,11 @@ class NewPipeSource {
               ))
       : AudioSource.uri(Uri.parse(track.location), tag: tag);
   Future<List<VideoResult>> search(String query) async {
-    final items = await channel
-        .invokeListMethod<Object?>('search', {'value': query.trim()})
-        .timeout(const Duration(seconds: 60));
-    return (items ?? [])
+    final items = await _invoke(
+      'search',
+      query.trim(),
+    ).timeout(const Duration(seconds: 60));
+    return (items as List? ?? [])
         .map((item) => VideoResult.fromMap(item as Map<Object?, Object?>))
         .toList();
   }
@@ -86,10 +94,11 @@ class NewPipeSource {
   Future<({Track track, Map<String, String> headers})> _resolve(
     String url,
   ) async {
-    final data = await channel
-        .invokeMapMethod<Object?, Object?>('resolve', {'value': url})
-        .timeout(const Duration(seconds: 60));
-    if (data == null) throw StateError('Resposta vazia da fonte.');
+    final data = await _invoke(
+      'resolve',
+      url,
+    ).timeout(const Duration(seconds: 60));
+    if (data is! Map) throw StateError('Resposta vazia da fonte.');
     final stream = Uri.tryParse(data['stream'] as String? ?? '');
     if (stream == null ||
         stream.scheme != 'https' ||

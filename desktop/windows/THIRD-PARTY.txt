@@ -1,0 +1,18 @@
+MusicON for Windows - GPL-3.0-or-later
+Source and build scripts: https://github.com/lenonronaldo2014-prog/MusicON
+
+NewPipeExtractor v0.27.0 - GPL-3.0-or-later
+https://github.com/TeamNewPipe/NewPipeExtractor
+Source archive is included in the MusicON repository third_party directory.
+
+OpenJDK runtime: see runtime/release and runtime/legal for the version and licenses.
+Temurin/OpenJDK sources: https://github.com/adoptium/temurin21-binaries/releases
+https://github.com/openjdk/jdk21u
+
+just_audio_media_kit - Unlicense; media_kit - MIT
+https://github.com/media-kit/media-kit
+Native media libraries: https://github.com/media-kit/libmpv-win32-video-build
+See the media_kit and libmpv distributions for native component licenses/sources.
+
+Other dependencies and licenses are declared in pubspec.lock and desktop/extractor/build.gradle.
+Flutter includes the dependency notices in its licenses interface.

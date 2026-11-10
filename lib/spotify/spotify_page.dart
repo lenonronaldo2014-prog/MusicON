@@ -24,6 +24,10 @@ class _SpotifyPageState extends State<SpotifyPage> {
   bool busy = false;
   String? error;
   Future<void> _chooseLogin() async {
+    if (widget.spotify.desktop) {
+      await _load(login: true);
+      return;
+    }
     setState(() => busy = true);
     final available = await widget.spotify.spotifyAppAvailable();
     if (!mounted) return;

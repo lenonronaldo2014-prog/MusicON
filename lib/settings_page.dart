@@ -263,7 +263,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           const SizedBox(height: 16),
           const Text(
-            'A nova versão abre no navegador. Depois do download, o Android orienta a instalação. Suas músicas e playlists continuam salvas ao atualizar.',
+            'A nova versão abre no navegador. Depois do download, execute o arquivo para atualizar. Suas músicas e playlists continuam salvas.',
           ),
           const SizedBox(height: 24),
           const Divider(),

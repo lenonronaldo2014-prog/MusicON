@@ -14,6 +14,10 @@ abstract class DeviceAudioService {
   Future<void> openSettings();
 }
 
+abstract class FolderAudioService implements DeviceAudioService {
+  Future<bool> addFolder();
+}
+
 class AndroidDeviceAudioService implements DeviceAudioService {
   static const channel = MethodChannel('musicon/device_audio');
   static const events = EventChannel('musicon/device_audio_changes');
@@ -32,7 +36,9 @@ class AndroidDeviceAudioService implements DeviceAudioService {
         if (uri == null ||
             uri.scheme != 'content' ||
             uri.host != 'media' ||
-            !RegExp(r'^/[A-Za-z0-9_-]+/audio/media/[0-9]+$').hasMatch(uri.path)) {
+            !RegExp(
+              r'^/[A-Za-z0-9_-]+/audio/media/[0-9]+$',
+            ).hasMatch(uri.path)) {
           throw StateError('Endereço de áudio local inválido.');
         }
         return Track(

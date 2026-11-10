@@ -36,7 +36,10 @@ Future<void> main() async {
   final source = NewPipeSource();
   final engine = JustAudioEngine(onlineSourceFactory: source.audioSource);
   final controller = PrototypeController(source, engine);
-  final library = LibraryController(PreferencesLibraryStore(), device: AndroidDeviceAudioService());
+  final library = LibraryController(
+    PreferencesLibraryStore(),
+    device: AndroidDeviceAudioService(),
+  );
   await library.load();
   final preferences = AppPreferences();
   await preferences.load();

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../sources/media_source.dart';
 import 'android_spotify_client.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 abstract class SpotifySessionStore {
   Future<String?> read();
@@ -47,12 +48,16 @@ class SpotifyService extends ChangeNotifier {
     ),
     http.Client? client,
     this.store = const SecureSpotifyStore(),
+    this.desktop = false,
+    this.browserLauncher,
   }) : _client =
            client ??
            (Platform.isAndroid ? AndroidSpotifyClient() : http.Client());
   final String clientId;
   final http.Client _client;
   final SpotifySessionStore store;
+  final bool desktop;
+  final Future<void> Function(Uri)? browserLauncher;
   Map<String, dynamic>? _session;
   Future<void>? _refreshing;
   VoidCallback? _cancelLogin;
@@ -122,7 +127,90 @@ class SpotifyService extends ChangeNotifier {
     if (_appConnecting) {
       throw const SourceException('Uma conexão já está em andamento.');
     }
-    return _connectAndroid(useSpotifyApp: useSpotifyApp);
+    return desktop
+        ? _connectDesktop()
+        : _connectAndroid(useSpotifyApp: useSpotifyApp);
+  }
+
+  Future<void> _connectDesktop() async {
+    _appConnecting = true;
+    final epoch = ++_epoch;
+    final verifier = _random(), state = _random();
+    HttpServer? server;
+    StreamSubscription<HttpRequest>? listener;
+    Timer? timer;
+    final result = Completer<String>();
+    unawaited(
+      result.future.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
+    _cancelLogin = () {
+      if (!result.isCompleted) {
+        result.completeError(const SourceException('Conexão cancelada.'));
+      }
+    };
+    try {
+      try {
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8888);
+      } on SocketException {
+        throw const SourceException(
+          'A porta de retorno do Spotify está em uso. Feche outra tentativa de login e tente novamente.',
+        );
+      }
+      const redirect = 'http://127.0.0.1:8888/callback';
+      listener = server.listen((request) async {
+        if (request.method != 'GET' ||
+            request.uri.path != '/callback' ||
+            request.uri.queryParameters['state'] != state) {
+          request.response.statusCode = 400;
+          await request.response.close();
+          return;
+        }
+        request.response.headers.contentType = ContentType.html;
+        request.response.write(
+          '<!doctype html><meta charset="utf-8"><title>MusicON</title><body style="background:#0d0c12;color:#eee;font:20px sans-serif;padding:48px"><h1>Volte ao MusicON</h1><p>A autorização foi recebida. A janela do MusicON concluirá a conexão.</p></body>',
+        );
+        await request.response.close();
+        if (result.isCompleted) return;
+        final code = request.uri.queryParameters['code'];
+        if (code == null ||
+            code.isEmpty ||
+            request.uri.queryParameters.containsKey('error')) {
+          result.completeError(
+            const SourceException('A conexão com o Spotify foi cancelada.'),
+          );
+        } else {
+          result.complete(code);
+        }
+      });
+      timer = Timer(const Duration(minutes: 10), () {
+        if (!result.isCompleted) {
+          result.completeError(
+            const SourceException('O login demorou demais. Tente novamente.'),
+          );
+        }
+      });
+      final uri = Uri.https('accounts.spotify.com', '/authorize', {
+        'response_type': 'code',
+        'client_id': clientId,
+        'redirect_uri': redirect,
+        'scope': 'playlist-read-private playlist-read-collaborative',
+        'code_challenge_method': 'S256',
+        'code_challenge': challenge(verifier),
+        'state': state,
+      });
+      if (browserLauncher != null) {
+        await browserLauncher!(uri);
+      } else if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw const SourceException('Não foi possível abrir o navegador.');
+      }
+      await _exchangeCode(await result.future, redirect, verifier, epoch);
+    } finally {
+      timer?.cancel();
+      _cancelLogin = null;
+      await listener?.cancel();
+      await server?.close(force: true);
+      _appConnecting = false;
+    }
   }
 
   Future<void> _connectAndroid({required bool useSpotifyApp}) async {

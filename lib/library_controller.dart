@@ -132,6 +132,12 @@ class LibraryController extends ChangeNotifier {
   }
 
   Future<void> openAudioSettings() async => device?.openSettings();
+  Future<void> chooseMusicFolder() async {
+    final service = device;
+    if (service is FolderAudioService && await service.addFolder()) {
+      await refreshDevice();
+    }
+  }
 
   bool canDeleteLocal(Track track) =>
       track.source == TrackSource.local &&
@@ -151,7 +157,8 @@ class LibraryController extends ChangeNotifier {
         ),
       );
       final target = p.normalize(p.absolute(track.location));
-      if (!p.isWithin(root, target) || !p.basename(target).startsWith('local-')) {
+      if (!p.isWithin(root, target) ||
+          !p.basename(target).startsWith('local-')) {
         throw StateError(
           'Este arquivo não pertence à pasta de músicas importadas.',
         );

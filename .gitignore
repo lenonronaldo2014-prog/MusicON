@@ -54,3 +54,7 @@ key.properties
 .env
 .env.*
 .musicon-backups/
+desktop/extractor/.gradle/
+desktop/extractor/build/
+windows/support/
+dist/

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const githubRepository = 'lenonronaldo2014-prog/MusicON';
 const releasesPage = 'https://github.com/$githubRepository/releases';
@@ -44,10 +46,16 @@ class UpdateService {
   UpdateService({
     http.Client? client,
     this.channel = const MethodChannel('musicon/app'),
+    this.desktop = false,
   }) : _client = client ?? http.Client();
   final http.Client _client;
   final MethodChannel channel;
+  final bool desktop;
   Future<AppVersion> installed() async {
+    if (desktop) {
+      final info = await PackageInfo.fromPlatform();
+      return AppVersion(info.version, int.tryParse(info.buildNumber) ?? 0);
+    }
     final info = await channel.invokeMapMethod<String, Object?>('version');
     final name = info?['name'] as String?;
     final build = info?['build'] as int?;
@@ -86,7 +94,9 @@ class UpdateService {
       throw StateError('A versão publicada não foi reconhecida.');
     }
     for (final asset in data['assets'] as List? ?? []) {
-      if (asset['name'] != 'MusicON.apk') continue;
+      if (asset['name'] != (desktop ? 'MusicON-Setup.exe' : 'MusicON.apk')) {
+        continue;
+      }
       final uri = Uri.tryParse(asset['browser_download_url'] as String? ?? '');
       if (uri != null &&
           uri.scheme == 'https' &&
@@ -96,10 +106,26 @@ class UpdateService {
         return ReleaseInfo(version, uri, data['body'] as String? ?? '');
       }
     }
-    throw StateError('Esta versão ainda não tem um APK disponível.');
+    throw StateError(
+      desktop
+          ? 'Esta versão ainda não tem um instalador Windows disponível.'
+          : 'Esta versão ainda não tem um APK disponível.',
+    );
   }
 
   Future<void> openDownload(Uri url) async {
+    if (desktop) {
+      if (url.scheme != 'https' ||
+          url.host != 'github.com' ||
+          url.userInfo.isNotEmpty ||
+          !url.path.startsWith('/$githubRepository/releases/download/')) {
+        throw StateError('Endereço de atualização inválido.');
+      }
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw StateError('Não foi possível abrir o navegador.');
+      }
+      return;
+    }
     await channel.invokeMethod<void>('openRelease', {'url': url.toString()});
   }
 

@@ -15,6 +15,7 @@ import 'models.dart';
 import 'online_services.dart';
 import 'explore/explorer_page.dart';
 import 'explore/browser_page.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const ink = Color(0xFF0D0C12);
 const panel = Color(0xFF19171F);
@@ -70,6 +71,7 @@ class MusicOnApp extends StatelessWidget {
     this.preferences,
     this.updates,
     this.spotify,
+    this.desktop = false,
   });
   final LibraryController library;
   final MusicEngine engine;
@@ -78,6 +80,7 @@ class MusicOnApp extends StatelessWidget {
   final AppPreferences? preferences;
   final UpdateService? updates;
   final SpotifyService? spotify;
+  final bool desktop;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([?preferences]),
@@ -93,6 +96,7 @@ class MusicOnApp extends StatelessWidget {
         preferences: preferences,
         updates: updates,
         spotify: spotify,
+        desktop: desktop,
       ),
     ),
   );
@@ -108,6 +112,7 @@ class MusicHome extends StatefulWidget {
     this.preferences,
     this.updates,
     this.spotify,
+    this.desktop = false,
   });
   final LibraryController library;
   final MusicEngine engine;
@@ -116,6 +121,7 @@ class MusicHome extends StatefulWidget {
   final AppPreferences? preferences;
   final UpdateService? updates;
   final SpotifyService? spotify;
+  final bool desktop;
   @override
   State<MusicHome> createState() => _MusicHomeState();
 }
@@ -130,6 +136,10 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
   String? lastError;
   LibraryController get library => widget.library;
   MusicEngine get engine => widget.engine;
+  String get localLabel => widget.desktop ? 'Do computador' : 'Do celular';
+  String get findLocalLabel => widget.desktop
+      ? 'Encontrar músicas do computador'
+      : 'Encontrar músicas do celular';
   @override
   void initState() {
     super.initState();
@@ -297,7 +307,7 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
                 Icons.phone_android_rounded,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              title: Text('Encontrar músicas do celular'),
+              title: Text(findLocalLabel),
               subtitle: Text(
                 'Atualizar automaticamente a biblioteca do aparelho',
               ),
@@ -306,6 +316,18 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
                 _phoneMusic();
               },
             ),
+            if (widget.desktop)
+              ListTile(
+                leading: const Icon(Icons.create_new_folder_outlined),
+                title: const Text('Adicionar pasta de músicas'),
+                subtitle: const Text(
+                  'Incluir uma pasta do computador na biblioteca',
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await library.chooseMusicFolder();
+                },
+              ),
             ListTile(
               leading: Icon(Icons.audio_file_rounded),
               title: Text('Escolher arquivos'),
@@ -391,7 +413,7 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
   );
 
   String _offlineLabel(Track track) {
-    if (track.providerId == 'device') return 'Do celular';
+    if (track.providerId == 'device') return localLabel;
     if (track.source == TrackSource.local) return 'Disponível offline';
     final job = services.downloads.jobFor(track.id);
     if (job == null) return track.sourceLabel;
@@ -576,123 +598,170 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
   );
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      bottom: false,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 780),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 16, 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Icon(
-                        Icons.graphic_eq_rounded,
-                        color: ink,
-                        size: 23,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'Music',
-                            style: TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          TextSpan(
-                            text: 'ON',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w900,
+  Widget build(BuildContext context) {
+    final wide = widget.desktop && MediaQuery.sizeOf(context).width >= 1000;
+    return Scaffold(
+      body: Row(
+        children: [
+          if (wide)
+            NavigationRail(
+              extended: true,
+              minExtendedWidth: 180,
+              backgroundColor: ink,
+              selectedIndex: page == 3 ? 2 : page,
+              onDestinationSelected: (value) =>
+                  setState(() => page = value == 2 ? 3 : value),
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: Text('Início'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.search_rounded),
+                  label: Text('Buscar'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.library_music_outlined),
+                  selectedIcon: Icon(Icons.library_music_rounded),
+                  label: Text('Biblioteca'),
+                ),
+              ],
+            ),
+          Expanded(
+            child: SafeArea(
+              bottom: false,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: widget.desktop ? 1120 : 780,
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 16, 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Icon(
+                                Icons.graphic_eq_rounded,
+                                color: ink,
+                                size: 23,
+                              ),
                             ),
+                            const SizedBox(width: 10),
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'Music',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'ON',
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              style: TextStyle(fontSize: 24, letterSpacing: -1),
+                            ),
+                            const Spacer(),
+                            if (widget.preferences != null &&
+                                widget.updates != null)
+                              IconButton(
+                                tooltip: 'Configurações',
+                                onPressed: _settings,
+                                icon: Icon(Icons.settings_rounded),
+                              ),
+                            IconButton(
+                              tooltip: 'Adicionar música',
+                              onPressed: library.importing ? null : _addMusic,
+                              icon: library.importing
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(Icons.add_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: switch (page) {
+                          0 => _home(),
+                          1 =>
+                            widget.discovery == null
+                                ? _search()
+                                : _onlineSearch(),
+                          2 => ExplorerPage(
+                            services: services,
+                            library: library,
+                            engine: engine,
                           ),
-                        ],
+                          _ => _library(),
+                        },
                       ),
-                      style: TextStyle(fontSize: 24, letterSpacing: -1),
-                    ),
-                    const Spacer(),
-                    if (widget.preferences != null && widget.updates != null)
-                      IconButton(
-                        tooltip: 'Configurações',
-                        onPressed: _settings,
-                        icon: Icon(Icons.settings_rounded),
-                      ),
-                    IconButton(
-                      tooltip: 'Adicionar música',
-                      onPressed: library.importing ? null : _addMusic,
-                      icon: library.importing
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(Icons.add_rounded),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-              Expanded(
-                child: switch (page) {
-                  0 => _home(),
-                  1 => widget.discovery == null ? _search() : _onlineSearch(),
-                  2 => ExplorerPage(
-                    services: services,
-                    library: library,
-                    engine: engine,
-                  ),
-                  _ => _library(),
-                },
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
-    ),
-    bottomNavigationBar: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (engine.current != null) _miniPlayer(),
-        NavigationBar(
-          selectedIndex: widget.discovery != null && page == 3 ? 2 : page,
-          onDestinationSelected: (value) => setState(
-            () => page = widget.discovery != null && value == 2 ? 3 : value,
-          ),
-          destinations: [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Início',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.search_rounded),
-              label: 'Buscar',
-            ),
-            if (widget.discovery == null)
-              NavigationDestination(
-                icon: Icon(Icons.explore_outlined),
-                selectedIcon: Icon(Icons.explore),
-                label: 'Explorar',
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (engine.current != null) _miniPlayer(),
+          if (!wide)
+            NavigationBar(
+              selectedIndex: widget.discovery != null && page == 3 ? 2 : page,
+              onDestinationSelected: (value) => setState(
+                () => page = widget.discovery != null && value == 2 ? 3 : value,
               ),
-            NavigationDestination(
-              icon: Icon(Icons.library_music_outlined),
-              selectedIcon: Icon(Icons.library_music_rounded),
-              label: 'Biblioteca',
+              destinations: [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: 'Início',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.search_rounded),
+                  label: 'Buscar',
+                ),
+                if (widget.discovery == null)
+                  NavigationDestination(
+                    icon: Icon(Icons.explore_outlined),
+                    selectedIcon: Icon(Icons.explore),
+                    label: 'Explorar',
+                  ),
+                NavigationDestination(
+                  icon: Icon(Icons.library_music_outlined),
+                  selectedIcon: Icon(Icons.library_music_rounded),
+                  label: 'Biblioteca',
+                ),
+              ],
             ),
-          ],
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 
   Widget _home() => ListView(
     padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
@@ -782,7 +851,9 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'No celular ou na nuvem.\nSempre no seu ritmo.',
+                    widget.desktop
+                        ? 'No computador ou na nuvem.\nSempre no seu ritmo.'
+                        : 'No celular ou na nuvem.\nSempre no seu ritmo.',
                     style: TextStyle(
                       color: Color(0xFFD8D0E8),
                       height: 1.5,
@@ -806,8 +877,10 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
         children: [
           Expanded(
             child: _shortcut(
-              Icons.phone_android_rounded,
-              'Do celular',
+              widget.desktop
+                  ? Icons.computer_rounded
+                  : Icons.phone_android_rounded,
+              localLabel,
               'Seu som offline',
               _phoneMusic,
             ),
@@ -906,14 +979,16 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 6),
             Text(
-              'Encontre automaticamente as músicas que já estão no seu celular.',
+              widget.desktop
+                  ? 'Encontre músicas na pasta Música e adicione outras pastas pelo botão +.'
+                  : 'Encontre automaticamente as músicas que já estão no seu celular.',
               style: TextStyle(color: muted, height: 1.5),
             ),
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: library.scanningDevice ? null : _phoneMusic,
               icon: Icon(Icons.folder_open_rounded),
-              label: Text('Encontrar músicas do celular'),
+              label: Text(findLocalLabel),
             ),
           ],
         ),
@@ -1174,12 +1249,16 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
                       label: Text(
                         library.mediaAuthorized == false
                             ? 'Permitir acesso às músicas'
+                            : widget.desktop
+                            ? 'Atualizar pastas de músicas'
                             : 'Atualizar músicas do celular',
                       ),
                     ),
                     if (library.mediaAuthorized == false)
                       IconButton(
-                        tooltip: 'Abrir permissões do Android',
+                        tooltip: widget.desktop
+                            ? 'Adicionar pasta de músicas'
+                            : 'Abrir permissões do Android',
                         onPressed: library.openAudioSettings,
                         icon: Icon(Icons.settings),
                       ),
@@ -1366,6 +1445,13 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
                     await _removeOffline(track);
                   } else if (action == 'source') {
                     if (engine.playing) await engine.toggle();
+                    if (widget.desktop) {
+                      await launchUrl(
+                        Uri.parse(track.originUrl!),
+                        mode: LaunchMode.externalApplication,
+                      );
+                      return;
+                    }
                     if (!context.mounted) return;
                     await Navigator.push(
                       context,
