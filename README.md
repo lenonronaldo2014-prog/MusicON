@@ -1,14 +1,22 @@
 # MusicON
 
-Player Android em Flutter com identidade própria, busca online, músicas do aparelho, favoritos, playlists, temas e atualização pelo GitHub.
+Player Android e Windows em Flutter com identidade própria, busca online, músicas locais, favoritos, playlists, temas e atualização pelo GitHub.
 
 [Baixar APK](https://github.com/lenonronaldo2014-prog/MusicON/releases/latest) · [Configurar Spotify](docs/spotify-setup.md) · [Privacidade](docs/privacy.md)
+
+[Versão Windows e instalação](docs/windows.md)
 
 <img src="docs/images/inicio-atual.png" width="280" alt="Tela inicial do MusicON com músicas da coleção"> <img src="docs/images/configuracoes.png" width="280" alt="Configurações de cores e atualizações">
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
-## Versão 0.7.3
+## Versão 0.8.0
+
+- Primeira versão Windows x64, com instalador e ZIP sem instalação, preservando a identidade visual do MusicON.
+- Navegação lateral em telas largas, músicas das pastas do computador, favoritos, playlists, temas, player e busca online.
+- Player Windows por media_kit; NewPipeExtractor executado localmente com runtime incluído, sem exigir Java instalado.
+- Spotify pelo navegador no Windows, com sessão cifrada pelo DPAPI da conta do usuário.
+- Atualização pelo GitHub escolhe o APK no Android e o instalador no Windows.
 
 - Corrigida a leitura de respostas da busca em Android anterior ao 13: a chamada `InputStream.readNBytes`, ainda presente no DEX anterior, foi substituída por leitura limitada compatível com Android 7+.
 - Falhas de compatibilidade do extrator são apresentadas na tela em vez de encerrar o processo por `LinkageError`.

@@ -6,11 +6,23 @@ dependencies {
 }
 java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 tasks.register('bundle', Jar) {
-    dependsOn classes
+    dependsOn classes, 'collectLicenses'
     archiveFileName = 'musicon-extractor.jar'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest { attributes 'Main-Class': 'com.musicon.desktop.ExtractorMain' }
     from sourceSets.main.output
     from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
     exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+}
+tasks.register('collectLicenses') {
+    doLast {
+        configurations.runtimeClasspath.files.each { artifact ->
+            copy {
+                from zipTree(artifact)
+                include '**/LICENSE*', '**/NOTICE*', '**/COPYING*'
+                includeEmptyDirs = false
+                into layout.buildDirectory.dir("licenses/${artifact.name}")
+            }
+        }
+    }
 }

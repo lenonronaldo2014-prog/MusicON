@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'platform_storage.dart';
 import 'downloads/audio_network.dart';
 import 'downloads/download_controller.dart';
 import 'downloads/download_store.dart';
@@ -46,7 +46,7 @@ class OnlineServices {
         store: PreferencesDownloadStore(),
         library: library,
         directory: () async => Directory(
-          p.join((await getApplicationDocumentsDirectory()).path, 'downloads'),
+          p.join((await musicStorageDirectory()).path, 'downloads'),
         ),
       ),
       close: httpClient.close,

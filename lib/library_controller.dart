@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'platform_storage.dart';
 import 'models.dart';
 import 'library_store.dart';
 import 'device_audio_service.dart';
@@ -153,7 +153,7 @@ class LibraryController extends ChangeNotifier {
     } else {
       final root = p.normalize(
         p.absolute(
-          p.join((await getApplicationDocumentsDirectory()).path, 'music'),
+          p.join((await musicStorageDirectory()).path, 'music'),
         ),
       );
       final target = p.normalize(p.absolute(track.location));
@@ -369,7 +369,7 @@ class LibraryController extends ChangeNotifier {
       );
       if (result == null) return 0;
       final dir = Directory(
-        p.join((await getApplicationDocumentsDirectory()).path, 'music'),
+        p.join((await musicStorageDirectory()).path, 'music'),
       );
       await dir.create(recursive: true);
       var failed = 0;

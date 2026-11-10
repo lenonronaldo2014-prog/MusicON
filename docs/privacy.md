@@ -4,6 +4,8 @@ O MusicON é um projeto independente de player Android. Não é afiliado ao Spot
 
 ## Dados no aparelho
 
+A versão Windows mantém configurações, biblioteca, downloads e cópias importadas no diretório de dados do aplicativo no perfil do usuário. Pastas de músicas adicionadas são lidas localmente e não são copiadas para um servidor. Os tokens opcionais do Spotify são cifrados pelo DPAPI da conta Windows. O desinstalador Windows preserva os dados do usuário; a versão sem instalação usa o mesmo diretório de dados. Consulte o [guia Windows](windows.md).
+
 Favoritos, playlists, cor do aplicativo e histórico de downloads ficam no armazenamento privado do app no seu aparelho. Arquivos baixados são guardados nesse armazenamento e podem ser removidos em Downloads ou pelo menu da música. Desinstalar o app pode remover esses dados; as versões com a mesma assinatura preservam a biblioteca ao atualizar.
 
 ## Biblioteca de músicas do celular

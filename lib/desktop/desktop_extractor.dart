@@ -97,7 +97,9 @@ class DesktopExtractor {
     await _start();
     final id = ++_id;
     final response = Completer<Object?>();
-    unawaited(response.future.then<void>((_) {},onError:(Object _,StackTrace _){}));
+    unawaited(
+      response.future.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
     _pending[id] = response;
     try {
       _process!.stdin.add(

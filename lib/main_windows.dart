@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'app_preferences.dart';
 import 'desktop/desktop_audio_service.dart';
 import 'desktop/desktop_extractor.dart';
@@ -85,6 +84,7 @@ Future<void> _smoke(
 ) async {
   final report = <String, Object?>{'platform': 'windows', 'version': '0.8.0'};
   File? audio;
+  Directory? fixtureDirectory;
   try {
     await Future<void>.delayed(const Duration(seconds: 2));
     final renderer =
@@ -107,9 +107,10 @@ Future<void> _smoke(
             as Map;
     report['onlineResolved'] = resolved['stream'] is String;
     // Low-volume generated PCM fixture; never added to the user's library.
-    audio = File(
-      p.join((await getTemporaryDirectory()).path, 'musicon-windows-smoke.wav'),
+    fixtureDirectory = await Directory.systemTemp.createTemp(
+      'musicon-windows-smoke-',
     );
+    audio = File(p.join(fixtureDirectory.path, 'silence.wav'));
     final samples = 44100 * 5;
     final bytes = ByteData(44 + samples * 2);
     void text(int offset, String value) {
@@ -173,6 +174,9 @@ Future<void> _smoke(
     report['errorType'] = error.runtimeType.toString();
   } finally {
     if (audio != null && await audio.exists()) await audio.delete();
+    if (fixtureDirectory != null && await fixtureDirectory.exists()) {
+      await fixtureDirectory.delete();
+    }
     await File(
       output,
     ).writeAsString(const JsonEncoder.withIndent('  ').convert(report));
