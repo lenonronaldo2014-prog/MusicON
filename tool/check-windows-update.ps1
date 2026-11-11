@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'Run this only on an isolated CI runner.' }
+$expected = (Get-Item -LiteralPath build/windows/x64/runner/Release/MusicON.exe).VersionInfo.ProductVersion
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{68B4A41C-0DCA-4281-BE65-D3C4A4AE51D8}_is1'
 if (Test-Path -LiteralPath $key) { throw 'A MusicON installation already exists.' }
 $fixture = Join-Path $env:RUNNER_TEMP 'MusicON update fixture'
@@ -38,10 +39,10 @@ if (-not (Select-String -LiteralPath $log -SimpleMatch 'Waiting for the current 
 $app = Get-Process MusicON -ErrorAction SilentlyContinue | Where-Object Path -eq $exe
 if (-not $app) { throw 'MusicON did not reopen after the update.' }
 try {
-  if ((Get-Item -LiteralPath $exe).VersionInfo.ProductVersion -ne '0.9.0+15') {
+  if ((Get-Item -LiteralPath $exe).VersionInfo.ProductVersion -ne $expected) {
     throw 'Wrong version after reopening.'
   }
-  'Windows update verified: 0.8.2 -> 0.9.0, wait and restart passed.'
+  "Windows update verified: 0.8.2 -> $expected, wait and restart passed."
 } finally {
   $app | Stop-Process
 }
