@@ -503,6 +503,32 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
       engine: engine,
       library: library,
       onOffline: () => _downloadTracks([engine.current!]),
+      volumeControl: widget.desktop ? _volumeControl() : null,
+    ),
+  );
+
+  Widget _volumeControl() =>
+      PlayerVolumeControl(engine: engine, onChangeEnd: _saveVolume);
+
+  Future<void> _saveVolume(double volume) async {
+    try {
+      await widget.preferences?.saveVolume(volume);
+    } catch (_) {
+      if (mounted) _message('Não foi possível salvar o volume.');
+    }
+  }
+
+  void _openVolume() => showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Volume do MusicON'),
+      content: SizedBox(width: 240, child: _volumeControl()),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Fechar'),
+        ),
+      ],
     ),
   );
   void _openPlaylist(MusicPlaylist playlist) => showModalBottomSheet<void>(
@@ -1515,43 +1541,58 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 8, 8, 6),
-                child: Row(
-                  children: [
-                    CoverArt(
-                      color: track.color,
-                      size: 42,
-                      artwork: track.artworkUrl,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            track.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => Row(
+                    children: [
+                      CoverArt(
+                        color: track.color,
+                        size: 42,
+                        artwork: track.artworkUrl,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              track.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              track.artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: muted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      PlayButton(engine: engine, compact: true),
+                      IconButton(
+                        tooltip: 'Próxima faixa',
+                        onPressed: engine.hasNext ? engine.next : null,
+                        icon: Icon(Icons.skip_next_rounded),
+                      ),
+                      if (widget.desktop)
+                        if (constraints.maxWidth >= 560)
+                          SizedBox(width: 206, child: _volumeControl())
+                        else
+                          IconButton(
+                            tooltip: 'Volume do MusicON',
+                            onPressed: _openVolume,
+                            icon: Icon(
+                              engine.volume == 0
+                                  ? Icons.volume_off_rounded
+                                  : Icons.volume_up_rounded,
                             ),
                           ),
-                          Text(
-                            track.artist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: muted, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    PlayButton(engine: engine, compact: true),
-                    IconButton(
-                      tooltip: 'Próxima faixa',
-                      onPressed: engine.hasNext ? engine.next : null,
-                      icon: Icon(Icons.skip_next_rounded),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               LinearProgressIndicator(
@@ -1577,8 +1618,10 @@ class PlayerSheet extends StatelessWidget {
     required this.engine,
     required this.library,
     this.onOffline,
+    this.volumeControl,
   });
   final VoidCallback? onOffline;
+  final Widget? volumeControl;
   final MusicEngine engine;
   final LibraryController library;
   @override
@@ -1735,6 +1778,10 @@ class PlayerSheet extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (volumeControl case final control?) ...[
+                      const SizedBox(height: 14),
+                      control,
+                    ],
                     const SizedBox(height: 30),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1774,6 +1821,54 @@ class PlayerSheet extends StatelessWidget {
             ),
           ),
         ),
+      );
+    },
+  );
+}
+
+class PlayerVolumeControl extends StatelessWidget {
+  const PlayerVolumeControl({
+    super.key,
+    required this.engine,
+    required this.onChangeEnd,
+  });
+
+  final MusicEngine engine;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: engine,
+    builder: (context, _) {
+      final volume = engine.volume;
+      String percent(double value) => '${(value * 100).round()}%';
+      return Row(
+        children: [
+          const SizedBox(width: 8),
+          Icon(
+            volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+            size: 20,
+          ),
+          Expanded(
+            child: Slider(
+              value: volume,
+              divisions: 100,
+              label: percent(volume),
+              semanticFormatterCallback: (value) => 'Volume: ${percent(value)}',
+              onChanged: engine.setVolume,
+              onChangeEnd: onChangeEnd,
+            ),
+          ),
+          SizedBox(
+            width: 38,
+            child: Text(
+              percent(volume),
+              textAlign: TextAlign.end,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       );
     },
   );

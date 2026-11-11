@@ -70,6 +70,8 @@ class FakeEngine extends MusicEngine {
   @override
   bool repeat = false;
   @override
+  double volume = 1;
+  @override
   Duration position = Duration.zero;
   @override
   Duration get duration => const Duration(seconds: 30);
@@ -102,6 +104,12 @@ class FakeEngine extends MusicEngine {
   @override
   Future<void> seek(Duration value) async {
     position = value;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setVolume(double value) async {
+    volume = value;
     notifyListeners();
   }
 

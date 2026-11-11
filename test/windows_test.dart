@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:musicon/app_preferences.dart';
 import 'package:musicon/desktop/desktop_audio_service.dart';
 import 'package:musicon/desktop/windows_spotify_store.dart';
 import 'package:musicon/library_controller.dart';
@@ -166,6 +168,63 @@ void main() {
       expect(service.connected, true);
       await service.disconnect();
       expect(store.value, isNull);
+    },
+  );
+  testWidgets(
+    'Windows player changes volume during playback and remembers the setting',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      SharedPreferences.setMockInitialValues({});
+      final preferences = AppPreferences();
+      await preferences.load();
+      final library = LibraryController(MemoryStore());
+      await library.load();
+      final engine = FakeEngine();
+      await engine.playQueue([
+        Track(
+          id: 'volume-test',
+          title: 'Faixa de teste',
+          artist: 'MusicON',
+          location: 'music.wav',
+          source: TrackSource.local,
+        ),
+      ], 0);
+      await tester.pumpWidget(
+        MusicOnApp(
+          library: library,
+          engine: engine,
+          preferences: preferences,
+          desktop: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final slider = find.descendant(
+        of: find.byType(PlayerVolumeControl),
+        matching: find.byType(Slider),
+      );
+      await tester.tapAt(tester.getCenter(slider));
+      await tester.pumpAndSettle();
+      expect(engine.volume, closeTo(0.5, 0.02));
+      expect(engine.playing, isTrue);
+
+      tester.view.physicalSize = const Size(500, 800);
+      await tester.pumpAndSettle();
+      expect(slider, findsNothing);
+      await tester.tap(find.byTooltip('Volume do MusicON'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Slider>(slider).value, engine.volume);
+      final reopened = AppPreferences();
+      await reopened.load();
+      expect(reopened.volume, engine.volume);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      reopened.dispose();
+      preferences.dispose();
+      library.dispose();
+      engine.dispose();
     },
   );
   testWidgets(

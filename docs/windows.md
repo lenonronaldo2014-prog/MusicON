@@ -20,6 +20,8 @@ Downloads, cópias importadas pelo seletor, configurações e a biblioteca são 
 
 ## Busca, player e offline
 
+Use o controle de volume na barra inferior durante a reprodução. Em uma janela estreita, clique no ícone de alto-falante para abrir o ajuste. O controle também aparece no player completo. O volume escolhido é lembrado e afeta apenas o MusicON.
+
 A busca utiliza o mesmo NewPipeExtractor v0.27.0 do Android, executado em um processo auxiliar local que se comunica por canais privados de entrada/saída. Não cria um servidor de controle exposto na rede. A fonte recebe os termos pesquisados e os pedidos necessários para fornecer áudio e capas.
 
 O player Windows usa just_audio com media_kit/libmpv. Ele permanece tocando ao minimizar a janela. Fechar o aplicativo encerra a reprodução. Favoritos, playlists, sequência, aleatório e o download completo para ouvir offline utilizam os mesmos controles da versão Android. Mantenha o MusicON aberto até o download terminar.

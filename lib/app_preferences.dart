@@ -18,6 +18,7 @@ enum MusicColor {
 class AppPreferences extends ChangeNotifier {
   MusicColor color = MusicColor.violet;
   bool autoUpdates = false;
+  double volume = 1;
   Future<void> _tail = Future.value();
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -26,6 +27,7 @@ class AppPreferences extends ChangeNotifier {
         MusicColor.values.where((c) => c.name == name).firstOrNull ??
         MusicColor.violet;
     autoUpdates = prefs.getBool('musicon.autoUpdates') ?? false;
+    volume = (prefs.getDouble('musicon.volume') ?? 1.0).clamp(0.0, 1.0);
     notifyListeners();
   }
 
@@ -39,6 +41,18 @@ class AppPreferences extends ChangeNotifier {
     autoUpdates = value;
     notifyListeners();
     return _save();
+  }
+
+  Future<void> saveVolume(double value) {
+    final level = volume = value.clamp(0.0, 1.0);
+    final saved = _tail.catchError((Object _) {}).then((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      if (!await prefs.setDouble('musicon.volume', level)) {
+        throw StateError('Não foi possível salvar o volume.');
+      }
+    });
+    _tail = saved;
+    return saved;
   }
 
   Future<void> _save() {

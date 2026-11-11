@@ -9,6 +9,7 @@ abstract class MusicEngine extends ChangeNotifier {
   bool get hasPrevious;
   bool get shuffle;
   bool get repeat;
+  double get volume;
   Duration get position;
   Duration get duration;
   String? get error;
@@ -16,6 +17,7 @@ abstract class MusicEngine extends ChangeNotifier {
   Future<void> removeTrack(String id);
   Future<void> toggle();
   Future<void> seek(Duration position);
+  Future<void> setVolume(double volume);
   Future<void> next();
   Future<void> previous();
   Future<void> toggleShuffle();

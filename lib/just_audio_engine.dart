@@ -20,6 +20,7 @@ class JustAudioEngine extends MusicEngine {
       _player.currentIndexStream.listen((_) => _changed()),
       _player.shuffleModeEnabledStream.listen((_) => _changed()),
       _player.loopModeStream.listen((_) => _changed()),
+      _player.volumeStream.listen((_) => _changed()),
       _player.errorStream.listen((_) => _fail()),
     ]);
   }
@@ -55,6 +56,8 @@ class JustAudioEngine extends MusicEngine {
   bool get shuffle => _player.shuffleModeEnabled;
   @override
   bool get repeat => _player.loopMode == LoopMode.all;
+  @override
+  double get volume => _player.volume;
   @override
   Duration get position => _player.position;
   @override
@@ -145,6 +148,9 @@ class JustAudioEngine extends MusicEngine {
   });
   @override
   Future<void> seek(Duration position) => _guard(() => _player.seek(position));
+  @override
+  Future<void> setVolume(double volume) =>
+      _guard(() => _player.setVolume(volume.clamp(0.0, 1.0)));
   @override
   Future<void> next() => _guard(() async {
     if (hasNext) await _player.seekToNext();

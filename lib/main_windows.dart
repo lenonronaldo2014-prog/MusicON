@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'app_preferences.dart';
 import 'desktop/desktop_audio_service.dart';
@@ -39,6 +40,7 @@ Future<void> main(List<String> args) async {
   await library.load();
   final preferences = AppPreferences();
   await preferences.load();
+  await engine.setVolume(preferences.volume);
   final spotify = SpotifyService(desktop: true, store: WindowsSpotifyStore());
   await spotify.load();
   final services = OnlineServices.create(library, source: source);
@@ -82,18 +84,12 @@ Future<void> _smoke(
   JustAudioEngine engine,
   GlobalKey capture,
 ) async {
-  final report = <String, Object?>{'platform': 'windows', 'version': '0.8.0'};
+  final report = <String, Object?>{'platform': 'windows'};
   File? audio;
   Directory? fixtureDirectory;
   try {
+    report['version'] = (await PackageInfo.fromPlatform()).version;
     await Future<void>.delayed(const Duration(seconds: 2));
-    final renderer =
-        capture.currentContext!.findRenderObject() as RenderRepaintBoundary;
-    final image = await renderer.toImage(pixelRatio: 1);
-    final png = await image.toByteData(format: ui.ImageByteFormat.png);
-    await File('$output.png').writeAsBytes(png!.buffer.asUint8List());
-    image.dispose();
-    report['uiScreenshot'] = true;
     final ping = await extractor.invoke('ping', '') as Map;
     report['extractor'] = ping['version'];
     final search =
@@ -142,6 +138,20 @@ Future<void> _smoke(
         source: TrackSource.local,
       ),
     ], 0);
+    final initialVolume = engine.volume;
+    await engine.setVolume(0.25);
+    report['reducedVolume'] = engine.volume;
+    await WidgetsBinding.instance.endOfFrame;
+    final renderer =
+        capture.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final image = await renderer.toImage(pixelRatio: 1);
+    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    await File('$output.png').writeAsBytes(png!.buffer.asUint8List());
+    image.dispose();
+    report['uiScreenshot'] = true;
+    await engine.setVolume(0);
+    report['mutedVolume'] = engine.volume;
+    await engine.setVolume(initialVolume);
     final end = DateTime.now().add(const Duration(seconds: 15));
     while (engine.position.inMilliseconds < 1200 &&
         engine.error == null &&
@@ -170,6 +180,8 @@ Future<void> _smoke(
         engine.error == null &&
         report['localError'] == null &&
         report['onlineError'] == null &&
+        report['reducedVolume'] == 0.25 &&
+        report['mutedVolume'] == 0.0 &&
         (report['localPositionMs'] as int) > 1000 &&
         (report['onlinePositionMs'] as int) >= onlineStart + 1000 &&
         search.isNotEmpty;
