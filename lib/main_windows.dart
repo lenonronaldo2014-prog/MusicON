@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' show nullptr;
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
+import 'package:win32/win32.dart';
 import 'app_preferences.dart';
 import 'desktop/desktop_audio_service.dart';
 import 'desktop/desktop_extractor.dart';
@@ -39,7 +42,10 @@ Future<void> main(List<String> args) async {
       .firstOrNull;
   final shutdownProbe = shutdownArg == null
       ? null
-      : _ShutdownProbe(shutdownArg.substring('--shutdown-test='.length));
+      : _ShutdownProbe(
+          shutdownArg.substring('--shutdown-test='.length),
+          viaApplication: args.contains('--shutdown-via-application'),
+        );
   AppLifecycleListener(
     onExitRequested: () async {
       try {
@@ -231,8 +237,9 @@ Future<File> _silentAudio(Directory directory, {int seconds = 5}) async {
 }
 
 class _ShutdownProbe {
-  _ShutdownProbe(this.output);
+  _ShutdownProbe(this.output, {required this.viaApplication});
   final String output;
+  final bool viaApplication;
   Directory? _directory;
   File? _audio;
   final _report = <String, Object?>{};
@@ -264,7 +271,19 @@ class _ShutdownProbe {
       _report['errorType'] = error.runtimeType.toString();
     }
     await File(output).writeAsString(jsonEncode(_report));
-    await ServicesBinding.instance.exitApplication(ui.AppExitType.cancelable);
+    if (viaApplication) {
+      await ServicesBinding.instance.exitApplication(ui.AppExitType.cancelable);
+    } else {
+      final title = 'MusicON - shutdown test'.toNativeUtf16();
+      try {
+        final window = FindWindow(nullptr, title);
+        if (window == 0 || PostMessage(window, WM_CLOSE, 0, 0) == 0) {
+          throw StateError('Could not close the shutdown test window.');
+        }
+      } finally {
+        calloc.free(title);
+      }
+    }
   }
 
   Future<void> complete() async {

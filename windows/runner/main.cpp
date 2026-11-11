@@ -54,6 +54,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
+  // A quit request can end the message loop before WM_DESTROY arrives.
+  // Clear the Flutter controller while the window and COM are still valid.
+  window.Destroy();
   ::CoUninitialize();
   ::CloseHandle(instance_mutex);
   return EXIT_SUCCESS;
