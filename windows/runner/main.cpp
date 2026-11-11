@@ -7,10 +7,18 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  HANDLE instance_mutex = ::CreateMutexW(nullptr, FALSE, L"Local\\MusicON.Desktop");
+  std::vector<std::string> command_line_arguments = GetCommandLineArguments();
+  bool shutdown_test = false;
+  for (const auto& argument : command_line_arguments) {
+    if (argument.rfind("--shutdown-test=", 0) == 0) shutdown_test = true;
+  }
+  const wchar_t* title = shutdown_test ? L"MusicON - shutdown test" : L"MusicON";
+  HANDLE instance_mutex = ::CreateMutexW(
+      nullptr, FALSE, shutdown_test ? L"Local\\MusicON.ShutdownTest"
+                                    : L"Local\\MusicON.Desktop");
   if (!instance_mutex) return EXIT_FAILURE;
   if (::GetLastError() == ERROR_ALREADY_EXISTS) {
-    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"MusicON");
+    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", title);
     if (existing) {
       if (::IsIconic(existing)) ::ShowWindow(existing, SW_RESTORE);
       ::SetForegroundWindow(existing);
@@ -30,15 +38,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   flutter::DartProject project(L"data");
 
-  std::vector<std::string> command_line_arguments =
-      GetCommandLineArguments();
-
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 820);
-  if (!window.Create(L"MusicON", origin, size)) {
+  if (!window.Create(title, origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

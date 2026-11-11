@@ -11,6 +11,7 @@ class JustAudioEngine extends MusicEngine {
   String? _error;
   bool _loading = false;
   bool _disposed = false;
+  Future<void>? _closing;
   final AudioSource Function(Track track, MediaItem tag)? onlineSourceFactory;
   JustAudioEngine({this.onlineSourceFactory}) {
     _subscriptions.addAll([
@@ -65,6 +66,7 @@ class JustAudioEngine extends MusicEngine {
   @override
   String? get error => _error;
   Future<void> _guard(Future<void> Function() action) async {
+    if (_disposed) return;
     try {
       await action();
     } on PlayerInterruptedException {
@@ -76,7 +78,11 @@ class JustAudioEngine extends MusicEngine {
 
   @override
   Future<void> playQueue(List<Track> tracks, int index) async {
-    if (_loading || tracks.isEmpty || index < 0 || index >= tracks.length) {
+    if (_disposed ||
+        _loading ||
+        tracks.isEmpty ||
+        index < 0 ||
+        index >= tracks.length) {
       return;
     }
     _loading = true;
@@ -84,6 +90,7 @@ class JustAudioEngine extends MusicEngine {
     _changed();
     try {
       await _player.pause();
+      if (_disposed) return;
       _queue = List.of(tracks);
       final sources = _queue.map((t) {
         final tag = MediaItem(
@@ -171,13 +178,24 @@ class JustAudioEngine extends MusicEngine {
   @override
   Future<void> toggleRepeat() =>
       _guard(() => _player.setLoopMode(repeat ? LoopMode.off : LoopMode.all));
+
+  /// Releases the native player before the Flutter engine can shut down.
+  Future<void> close() => _closing ??= _release();
+
+  Future<void> _release() async {
+    _disposed = true;
+    try {
+      await Future.wait(
+        _subscriptions.map((subscription) => subscription.cancel()),
+      );
+    } finally {
+      await _player.dispose();
+    }
+  }
+
   @override
   void dispose() {
-    _disposed = true;
-    for (final subscription in _subscriptions) {
-      unawaited(subscription.cancel());
-    }
-    unawaited(_player.dispose());
+    unawaited(close());
     super.dispose();
   }
 }

@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -33,6 +34,31 @@ Future<void> main(List<String> args) async {
   final extractor = DesktopExtractor();
   final source = NewPipeSource(backend: extractor.invoke);
   final engine = JustAudioEngine(onlineSourceFactory: source.audioSource);
+  final shutdownArg = args
+      .where((arg) => arg.startsWith('--shutdown-test='))
+      .firstOrNull;
+  final shutdownProbe = shutdownArg == null
+      ? null
+      : _ShutdownProbe(shutdownArg.substring('--shutdown-test='.length));
+  AppLifecycleListener(
+    onExitRequested: () async {
+      try {
+        // libmpv may still call Dart until the player releases its callbacks.
+        final closing = engine.close();
+        extractor.dispose();
+        await closing;
+        await shutdownProbe?.complete();
+      } catch (error, stack) {
+        await const DiagnosticsService().record('shutdown', error, stack);
+      }
+      return ui.AppExitResponse.exit;
+    },
+  );
+  if (shutdownProbe != null) {
+    runApp(const SizedBox.shrink());
+    await shutdownProbe.run(engine);
+    return;
+  }
   final library = LibraryController(
     PreferencesLibraryStore(),
     device: DesktopAudioService(),
@@ -106,29 +132,7 @@ Future<void> _smoke(
     fixtureDirectory = await Directory.systemTemp.createTemp(
       'musicon-windows-smoke-',
     );
-    audio = File(p.join(fixtureDirectory.path, 'silence.wav'));
-    final samples = 44100 * 5;
-    final bytes = ByteData(44 + samples * 2);
-    void text(int offset, String value) {
-      for (var i = 0; i < value.length; i++) {
-        bytes.setUint8(offset + i, value.codeUnitAt(i));
-      }
-    }
-
-    text(0, 'RIFF');
-    bytes.setUint32(4, 36 + samples * 2, Endian.little);
-    text(8, 'WAVE');
-    text(12, 'fmt ');
-    bytes.setUint32(16, 16, Endian.little);
-    bytes.setUint16(20, 1, Endian.little);
-    bytes.setUint16(22, 1, Endian.little);
-    bytes.setUint32(24, 44100, Endian.little);
-    bytes.setUint32(28, 88200, Endian.little);
-    bytes.setUint16(32, 2, Endian.little);
-    bytes.setUint16(34, 16, Endian.little);
-    text(36, 'data');
-    bytes.setUint32(40, samples * 2, Endian.little);
-    await audio.writeAsBytes(bytes.buffer.asUint8List());
+    audio = await _silentAudio(fixtureDirectory);
     await engine.playQueue([
       Track(
         id: 'windows-smoke',
@@ -196,5 +200,79 @@ Future<void> _smoke(
     await File(
       output,
     ).writeAsString(const JsonEncoder.withIndent('  ').convert(report));
+  }
+}
+
+Future<File> _silentAudio(Directory directory, {int seconds = 5}) async {
+  final samples = 44100 * seconds;
+  final bytes = ByteData(44 + samples * 2);
+  void text(int offset, String value) {
+    for (var i = 0; i < value.length; i++) {
+      bytes.setUint8(offset + i, value.codeUnitAt(i));
+    }
+  }
+
+  text(0, 'RIFF');
+  bytes.setUint32(4, 36 + samples * 2, Endian.little);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  bytes.setUint32(16, 16, Endian.little);
+  bytes.setUint16(20, 1, Endian.little);
+  bytes.setUint16(22, 1, Endian.little);
+  bytes.setUint32(24, 44100, Endian.little);
+  bytes.setUint32(28, 88200, Endian.little);
+  bytes.setUint16(32, 2, Endian.little);
+  bytes.setUint16(34, 16, Endian.little);
+  text(36, 'data');
+  bytes.setUint32(40, samples * 2, Endian.little);
+  return File(
+    p.join(directory.path, 'silence.wav'),
+  ).writeAsBytes(bytes.buffer.asUint8List());
+}
+
+class _ShutdownProbe {
+  _ShutdownProbe(this.output);
+  final String output;
+  Directory? _directory;
+  File? _audio;
+  final _report = <String, Object?>{};
+
+  Future<void> run(JustAudioEngine engine) async {
+    await WidgetsBinding.instance.endOfFrame;
+    try {
+      _directory = await Directory.systemTemp.createTemp('musicon-shutdown-');
+      final audio = _audio = await _silentAudio(_directory!, seconds: 20);
+      await engine.playQueue([
+        Track(
+          id: 'shutdown-test',
+          title: 'Validação de encerramento',
+          artist: 'MusicON',
+          location: audio.path,
+          source: TrackSource.local,
+        ),
+      ], 0);
+      final end = DateTime.now().add(const Duration(seconds: 5));
+      while (engine.position.inMilliseconds < 500 &&
+          engine.error == null &&
+          DateTime.now().isBefore(end)) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      _report['playingBeforeExit'] = engine.playing;
+      _report['positionBeforeExitMs'] = engine.position.inMilliseconds;
+      _report['playbackError'] = engine.error;
+    } catch (error) {
+      _report['errorType'] = error.runtimeType.toString();
+    }
+    await File(output).writeAsString(jsonEncode(_report));
+    await ServicesBinding.instance.exitApplication(ui.AppExitType.cancelable);
+  }
+
+  Future<void> complete() async {
+    _report['playerReleased'] = true;
+    await File(output).writeAsString(jsonEncode(_report), flush: true);
+    final audio = _audio;
+    final directory = _directory;
+    if (audio != null && await audio.exists()) await audio.delete();
+    if (directory != null && await directory.exists()) await directory.delete();
   }
 }
