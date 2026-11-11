@@ -23,6 +23,8 @@ class _SettingsPageState extends State<SettingsPage> {
   AppVersion? installed;
   ReleaseInfo? available;
   bool checking = false;
+  bool updating = false;
+  double? updateProgress;
   String? status;
   bool readingDiagnostics = false;
 
@@ -160,6 +162,54 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _applyUpdate(ReleaseInfo release) async {
+    if (updating) return;
+    if (!widget.updates.canInstall(release)) {
+      try {
+        await widget.updates.openDownload(release.download);
+      } catch (_) {
+        if (mounted) {
+          setState(() => status = 'Não foi possível abrir o download.');
+        }
+      }
+      return;
+    }
+    setState(() {
+      updating = true;
+      updateProgress = 0;
+      status = 'Baixando a atualização…';
+    });
+    try {
+      await widget.updates.install(
+        release,
+        onProgress: (progress) {
+          if (mounted &&
+              (progress * 100).floor() !=
+                  ((updateProgress ?? 0) * 100).floor()) {
+            setState(() => updateProgress = progress);
+          }
+        },
+        onInstalling: () {
+          if (!mounted) return;
+          setState(() {
+            updateProgress = null;
+            status = 'Instalando. O MusicON vai fechar e reabrir.';
+          });
+        },
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          updating = false;
+          updateProgress = null;
+          status = error is StateError
+              ? error.message.toString()
+              : 'Não foi possível preparar a atualização. Tente novamente.';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Configurações')),
@@ -228,7 +278,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: checking ? null : _check,
+            onPressed: checking || updating ? null : _check,
             icon: checking
                 ? const SizedBox(
                     width: 18,
@@ -243,27 +293,28 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(status!, semanticsLabel: status),
             ),
-          if (available != null)
+          if (updating) ...[
+            LinearProgressIndicator(value: updateProgress),
+            if (updateProgress case final progress?)
+              Text('${(progress * 100).floor()}%'),
+          ] else if (available case final release?) ...[
+            if (widget.updates.canInstall(release))
+              const Text('O MusicON será reaberto ao terminar a atualização.'),
             OutlinedButton.icon(
-              onPressed: () async {
-                try {
-                  await widget.updates.openDownload(available!.download);
-                } catch (_) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Não foi possível abrir o download.'),
-                      ),
-                    );
-                  }
-                }
-              },
+              onPressed: () => _applyUpdate(release),
               icon: const Icon(Icons.download_rounded),
-              label: const Text('Baixar nova versão'),
+              label: Text(
+                widget.updates.canInstall(release)
+                    ? 'Atualizar agora'
+                    : 'Baixar nova versão',
+              ),
             ),
+          ],
           const SizedBox(height: 16),
-          const Text(
-            'A nova versão abre no navegador. Depois do download, execute o arquivo para atualizar. Suas músicas e playlists continuam salvas.',
+          Text(
+            widget.updates.desktopInstaller != null
+                ? 'Atualize pelo MusicON. Suas músicas, playlists e configurações continuam salvas.'
+                : 'A nova versão abre no navegador. Depois do download, execute o arquivo para atualizar. Suas músicas e playlists continuam salvas.',
           ),
           const SizedBox(height: 24),
           const Divider(),

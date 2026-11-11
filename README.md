@@ -12,6 +12,10 @@ Player Android e Windows em Flutter com identidade própria, busca online, músi
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
+## Versão 0.9.0
+
+- A edição instalada do Windows pode baixar e instalar novas versões pelo botão **Atualizar agora** em **Configurações → Atualizações**. O MusicON reabre ao concluir. Instale a 0.9.0 uma vez para habilitar o recurso.
+
 ## Versão 0.8.2
 
 - Corrigido o encerramento do MusicON no Windows com áudio ativo: o player é liberado antes de a janela fechar.

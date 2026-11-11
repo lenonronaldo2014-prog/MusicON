@@ -30,6 +30,11 @@ jobs:
       - name: Build installer and portable app
         shell: pwsh
         run: ./tool/build-windows.ps1
+      - name: Verify in-app installer upgrade
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./tool/check-windows-update.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: MusicON-Windows

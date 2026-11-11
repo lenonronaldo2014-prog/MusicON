@@ -17,6 +17,7 @@ import 'app_preferences.dart';
 import 'desktop/desktop_audio_service.dart';
 import 'desktop/desktop_extractor.dart';
 import 'desktop/windows_spotify_store.dart';
+import 'desktop/windows_update_installer.dart';
 import 'diagnostics_service.dart';
 import 'just_audio_engine.dart';
 import 'library_controller.dart';
@@ -87,7 +88,10 @@ Future<void> main(List<String> args) async {
         discovery: PrototypeController(source, engine),
         services: services,
         preferences: preferences,
-        updates: UpdateService(desktop: true),
+        updates: UpdateService(
+          desktop: true,
+          desktopInstaller: WindowsUpdateInstaller.current(),
+        ),
         spotify: spotify,
         desktop: true,
       ),
