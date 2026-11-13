@@ -55,15 +55,34 @@ public final class ExtractorMain {
         var service = NewPipe.getService(0);
         var handler = service.getSearchQHFactory().fromQuery(query, List.of("videos"), "");
         var info = SearchInfo.getInfo(service, handler);
+        var videos = new LinkedHashMap<String, StreamInfoItem>();
+        var items = info.getRelatedItems();
+        var nextPage = info.getNextPage();
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        for (int pageNumber = 0; pageNumber < 10; pageNumber++) {
+            for (var item : items) {
+                if (!(item instanceof StreamInfoItem video)) continue;
+                videos.putIfAbsent(video.getUrl(), video);
+                if (videos.size() == 100) break;
+            }
+            if (videos.size() == 100 || !Page.isValid(nextPage) ||
+                    pageNumber == 9 || System.nanoTime() >= deadline) break;
+            try {
+                var page = SearchInfo.getMoreItems(service, handler, nextPage);
+                items = page.getItems();
+                nextPage = page.getNextPage();
+            } catch (Exception error) {
+                // Keep usable results if a later page is temporarily unavailable.
+                break;
+            }
+        }
         var results = new ArrayList<Map<String, Object>>();
-        for (var item : info.getRelatedItems()) {
-            if (!(item instanceof StreamInfoItem video)) continue;
+        for (var video : videos.values()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("title", video.getName()); row.put("artist", video.getUploaderName());
             row.put("url", video.getUrl()); row.put("duration", video.getDuration());
             row.put("artwork", artwork(video.getThumbnails()));
             results.add(row);
-            if (results.size() == 20) break;
         }
         return results;
     }

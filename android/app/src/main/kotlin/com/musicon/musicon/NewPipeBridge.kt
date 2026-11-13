@@ -8,6 +8,7 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
@@ -71,7 +72,27 @@ class NewPipeBridge : FlutterPlugin, MethodChannel.MethodCallHandler {
         val service = NewPipe.getService(0)
         val handler = service.searchQHFactory.fromQuery(query, listOf("videos"), "")
         val info = SearchInfo.getInfo(service, handler)
-        return info.relatedItems.filterIsInstance<StreamInfoItem>().take(20).map { item ->
+        val videos = linkedMapOf<String, StreamInfoItem>()
+        var items = info.relatedItems
+        var nextPage = info.nextPage
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30)
+        for (pageNumber in 0 until 10) {
+            for (item in items.filterIsInstance<StreamInfoItem>()) {
+                videos.putIfAbsent(item.url, item)
+                if (videos.size == 100) break
+            }
+            if (videos.size == 100 || !Page.isValid(nextPage) ||
+                pageNumber == 9 || System.nanoTime() >= deadline) break
+            val page = try {
+                SearchInfo.getMoreItems(service, handler, nextPage)
+            } catch (e: Exception) {
+                // Keep usable results if a later page is temporarily unavailable.
+                break
+            }
+            items = page.items
+            nextPage = page.nextPage
+        }
+        return videos.values.map { item ->
             mapOf("title" to item.name, "artist" to item.uploaderName,
                 "url" to item.url, "duration" to item.duration,
                 "artwork" to item.thumbnails.maxByOrNull { it.width }?.url)

@@ -1,7 +1,7 @@
 name: musicon
 description: MusicON — sua música local e online no mesmo lugar.
 publish_to: none
-version: 0.9.0+15
+version: 0.9.1+16
 environment:
   sdk: ^3.11.0
 dependencies:

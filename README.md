@@ -12,6 +12,10 @@ Player Android e Windows em Flutter com identidade própria, busca online, músi
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
+## Versão 0.9.1
+
+- A busca no Android e no Windows reúne até 100 músicas por consulta, carregando páginas adicionais da fonte e removendo resultados repetidos. A quantidade depende da disponibilidade e da conexão.
+
 ## Versão 0.9.0
 
 - A edição instalada do Windows pode baixar e instalar novas versões pelo botão **Atualizar agora** em **Configurações → Atualizações**. O MusicON reabre ao concluir. Instale a 0.9.0 uma vez para habilitar o recurso.
@@ -48,7 +52,7 @@ Player Android e Windows em Flutter com identidade própria, busca online, músi
 - Falhas persistentes mostram orientação de rede em português e permitem tentar conectar novamente. A sessão já salva é preservada quando a rede falha; respostas HTTP e timeouts não são repetidos automaticamente.
 
 - Tela inicial original preservada e navegação Início / Buscar / Biblioteca.
-- Busca de músicas e artistas com NewPipeExtractor v0.27.0, até 20 resultados por consulta, sem login do YouTube.
+- Busca de músicas e artistas com NewPipeExtractor v0.27.0, até 100 resultados por consulta, sem login do YouTube.
 - Capas/miniaturas reais quando fornecidas pela fonte; imagem ilustrada de reserva. Miniatura de vídeo não garante uma capa oficial de álbum.
 - Leitura automática das músicas do celular pelo MediaStore, com permissão de áudio do Android, atualização ao voltar ao app e acompanhamento de mudanças no catálogo.
 - Favoritos e playlists salvas no aparelho, sem músicas demo incluídas.
