@@ -12,6 +12,13 @@ Player Android e Windows em Flutter com identidade própria, busca online, músi
 
 <img src="docs/images/downloads.png" width="280" alt="Download concluído e disponível offline"> <img src="docs/images/spotify.png" width="280" alt="Conexão opcional com Spotify">
 
+## Versão 0.10.0
+
+- Android Auto: biblioteca, favoritos, músicas do aparelho e playlists na central, usando a mesma fila e os mesmos controles do celular.
+- Palavra do dia no Android: 465 mensagens offline, sendo 155 bíblicas com referências, 155 motivacionais e 155 reflexões. Uma mensagem por dia, sem repetir durante o ciclo de 465 dias.
+- Aviso local por volta das 8h, no horário do celular, com controle para ativar/desativar e canal separado da reprodução. Toque em **Permitir avisos** no cartão da mensagem para autorizar as notificações.
+- Inicialização dos serviços nativos de mídia também quando o Android Auto abre o aplicativo sem uma tela no celular.
+
 ## Versão 0.9.1
 
 - A busca no Android e no Windows reúne até 100 músicas por consulta, carregando páginas adicionais da fonte e removendo resultados repetidos. A quantidade depende da disponibilidade e da conexão.
@@ -73,6 +80,20 @@ A leitura inclui arquivos marcados como música pelo catálogo do sistema. Não 
 No menu de um arquivo do aparelho, escolha **Excluir música do aparelho**. O app pede confirmação e utiliza o consentimento do Android quando exigido. Cancelar mantém o arquivo. Depois de excluir, o item sai dos favoritos, das playlists e da fila de reprodução. Cópias importadas anteriormente pelo seletor têm confirmação específica para excluir a cópia privada. O download de uma faixa online continua usando **Remover download**, que preserva sua referência na coleção.
 
 As demos antigas foram retiradas dos assets e seus itens são descartados ao recuperar a biblioteca. A identidade visual e o desenho da tela inicial permanecem; o cartão agora abre a busca e a seção Sua coleção mostra músicas reais.
+
+## Android Auto
+
+Abra o MusicON ao menos uma vez no celular, permita o acesso às músicas e conecte ao Android Auto. A central oferece **Todas as músicas**, **Favoritos**, **No aparelho** e **Playlists**. Os comandos de tocar, pausar, avançar, voltar e buscar por posição controlam o mesmo player do celular. A busca por voz pode encontrar títulos e artistas já presentes na biblioteca.
+
+Para testes com APK instalado diretamente, habilite **Fontes desconhecidas** nas opções de desenvolvedor do Android Auto e confira a lista **Personalizar acesso rápido**, seguindo a [orientação do Google](https://developer.android.com/training/cars/testing#allow-unknown-sources). A compatibilidade ainda precisa ser conferida na central real. Apple CarPlay exige uma versão iOS e não está incluído nesta atualização.
+
+## Palavra do dia
+
+No Android, a tela inicial e o player mostram a mensagem do dia e o controle **Receber por volta das 8h**. Toque em **Permitir avisos** para autorizar as notificações. Se houver bloqueio do sistema, **Configurações** abre o canal da palavra do dia. Tocar no aviso abre a mensagem completa.
+
+O conteúdo vem no aplicativo e não depende de internet. A ordem é embaralhada por instalação e permanece estável durante o mesmo dia local. As mensagens bíblicas são paráfrases identificadas pelas referências, não citações literais.
+
+O receptor Android agenda o próximo aviso sem precisar manter a tela do aplicativo aberta, recupera o agendamento após reinício/atualização e ajusta mudanças de relógio/fuso. O horário é aproximado e pode atrasar com as políticas de bateria, conforme a [documentação do Android](https://developer.android.com/develop/background-work/services/alarms). Forçar a parada do aplicativo pode suspender os avisos até ele ser reaberto. A palavra do dia não altera a notificação nem a reprodução de música. Esse recurso de notificação é exclusivo do Android nesta versão.
 
 ## Ouvir offline
 

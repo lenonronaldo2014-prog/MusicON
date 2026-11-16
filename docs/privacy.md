@@ -14,6 +14,12 @@ Com a sua permissão de áudio, o MusicON consulta o catálogo MediaStore do And
 
 A exclusão de arquivos locais só acontece após sua confirmação no aplicativo e, quando necessário, pelo próprio Android. Cancelar não exclui o arquivo. Remover um download interno mantém a referência online; excluir um arquivo do aparelho remove também suas referências nos favoritos e playlists do MusicON.
 
+## Palavra do dia e Android Auto
+
+As 465 mensagens da palavra do dia acompanham o aplicativo e são escolhidas localmente. A preferência de avisos, a sequência embaralhada e a última data de entrega ficam no armazenamento privado. O agendamento não consulta servidores nem transmite a mensagem escolhida. A notificação pode aparecer na tela bloqueada, conforme as configurações do Android; você pode desativar o aviso no cartão da mensagem ou no canal específico do sistema.
+
+Quando conectado ao Android Auto, o aplicativo disponibiliza os títulos, artistas, favoritos e playlists à central para navegação e controles de reprodução. Isso utiliza a sessão de mídia do Android. O MusicON não mantém um servidor próprio para receber esses dados.
+
 ## Busca e reprodução
 
 A fonte de busca recebe os termos que você informa. Ao buscar uma versão de uma música de uma playlist importada, o título e o artista dessa faixa são enviados à fonte de busca somente após sua ação. Serviços de reprodução recebem as requisições necessárias para fornecer o áudio e as capas. Esses serviços podem conhecer o endereço IP e informações técnicas da conexão.

@@ -16,6 +16,7 @@ import 'online_services.dart';
 import 'explore/explorer_page.dart';
 import 'explore/browser_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'daily_word.dart';
 
 const ink = Color(0xFF0D0C12);
 const panel = Color(0xFF19171F);
@@ -72,6 +73,7 @@ class MusicOnApp extends StatelessWidget {
     this.updates,
     this.spotify,
     this.desktop = false,
+    this.dailyWord,
   });
   final LibraryController library;
   final MusicEngine engine;
@@ -81,6 +83,7 @@ class MusicOnApp extends StatelessWidget {
   final UpdateService? updates;
   final SpotifyService? spotify;
   final bool desktop;
+  final DailyWordController? dailyWord;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([?preferences]),
@@ -97,6 +100,7 @@ class MusicOnApp extends StatelessWidget {
         updates: updates,
         spotify: spotify,
         desktop: desktop,
+        dailyWord: dailyWord,
       ),
     ),
   );
@@ -113,6 +117,7 @@ class MusicHome extends StatefulWidget {
     this.updates,
     this.spotify,
     this.desktop = false,
+    this.dailyWord,
   });
   final LibraryController library;
   final MusicEngine engine;
@@ -122,6 +127,7 @@ class MusicHome extends StatefulWidget {
   final UpdateService? updates;
   final SpotifyService? spotify;
   final bool desktop;
+  final DailyWordController? dailyWord;
   @override
   State<MusicHome> createState() => _MusicHomeState();
 }
@@ -151,10 +157,35 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
     services.downloads.addListener(_onChange);
     engine.addListener(_onChange);
     widget.discovery?.addListener(_onChange);
+    widget.dailyWord?.addListener(_onDailyWordChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onChange();
+      _onDailyWordChange();
       library.startDeviceMonitoring();
       if (widget.preferences?.autoUpdates == true) _automaticUpdate();
+    });
+  }
+
+  void _onDailyWordChange() {
+    if (!mounted || widget.dailyWord?.consumeOpenRequest() != true) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => page = 0);
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Palavra do dia'),
+          content: SingleChildScrollView(
+            child: DailyWordCard(controller: widget.dailyWord!),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fechar'),
+            ),
+          ],
+        ),
+      );
     });
   }
 
@@ -273,6 +304,7 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
     services.downloads.removeListener(_onChange);
     engine.removeListener(_onChange);
     widget.discovery?.removeListener(_onChange);
+    widget.dailyWord?.removeListener(_onDailyWordChange);
     onlineInput.dispose();
     if (widget.services == null) services.dispose();
     super.dispose();
@@ -504,6 +536,7 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
       library: library,
       onOffline: () => _downloadTracks([engine.current!]),
       volumeControl: widget.desktop ? _volumeControl() : null,
+      dailyWord: widget.dailyWord,
     ),
   );
 
@@ -792,6 +825,10 @@ class _MusicHomeState extends State<MusicHome> with WidgetsBindingObserver {
   Widget _home() => ListView(
     padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
     children: [
+      if (widget.dailyWord != null) ...[
+        DailyWordCard(controller: widget.dailyWord!),
+        const SizedBox(height: 24),
+      ],
       Text(
         'SINTONIZE O SEU MOMENTO',
         style: TextStyle(
@@ -1619,7 +1656,9 @@ class PlayerSheet extends StatelessWidget {
     required this.library,
     this.onOffline,
     this.volumeControl,
+    this.dailyWord,
   });
+  final DailyWordController? dailyWord;
   final VoidCallback? onOffline;
   final Widget? volumeControl;
   final MusicEngine engine;
@@ -1806,6 +1845,10 @@ class PlayerSheet extends StatelessWidget {
                         icon: Icon(Icons.download_for_offline_outlined),
                         label: Text('Disponibilizar offline'),
                       ),
+                    if (dailyWord != null) ...[
+                      const SizedBox(height: 24),
+                      DailyWordCard(controller: dailyWord!),
+                    ],
                     if (engine.error != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 16),

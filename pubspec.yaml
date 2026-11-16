@@ -1,14 +1,17 @@
 name: musicon
 description: MusicON — sua música local e online no mesmo lugar.
 publish_to: none
-version: 0.9.1+16
+version: 0.10.0+17
 environment:
   sdk: ^3.11.0
 dependencies:
   flutter:
     sdk: flutter
   just_audio: 0.10.6
-  just_audio_background: ^0.0.1-beta.17
+  audio_service: ^0.18.19
+  rxdart: ^0.28.0
+  musicon_media:
+    path: packages/musicon_media
   audio_session: ^0.2.2
   file_picker: ^8.3.7
   path_provider: ^2.1.5

@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
+import 'daily_word.dart';
+import 'music_audio_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'just_audio_engine.dart';
 import 'newpipe_prototype.dart';
@@ -24,12 +26,6 @@ import 'downloads/download_job.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   const DiagnosticsService().install();
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.musicon.prototype.playback',
-    androidNotificationChannelName: 'Reprodução MusicON',
-    androidNotificationOngoing: true,
-    androidNotificationIcon: 'drawable/ic_stat_music',
-  );
   await (await AudioSession.instance).configure(
     const AudioSessionConfiguration.music(),
   );
@@ -41,6 +37,17 @@ Future<void> main() async {
     device: AndroidDeviceAudioService(),
   );
   await library.load();
+  await AudioService.init(
+    builder: () => MusicAudioHandler(engine, library),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.musicon.prototype.playback',
+      androidNotificationChannelName: 'Reprodução MusicON',
+      androidNotificationOngoing: true,
+      androidNotificationIcon: 'drawable/ic_stat_music',
+    ),
+  );
+  final dailyWord = DailyWordController();
+  await dailyWord.initialize();
   final preferences = AppPreferences();
   await preferences.load();
   final spotify = SpotifyService();
@@ -56,6 +63,7 @@ Future<void> main() async {
       discovery: controller,
       preferences: preferences,
       updates: UpdateService(),
+      dailyWord: dailyWord,
     ),
   );
   if (kDebugMode && const bool.fromEnvironment('NEWPIPE_OFFLINE_PROBE')) {

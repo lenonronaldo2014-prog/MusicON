@@ -56,6 +56,13 @@ class FakeEngine extends MusicEngine {
   List<Track> queue = [];
   int index = 0;
   @override
+  List<Track> get queueTracks => queue;
+  @override
+  int? get queueIndex => queue.isEmpty ? null : index;
+  @override
+  MusicProcessingState get processingState =>
+      queue.isEmpty ? MusicProcessingState.idle : MusicProcessingState.ready;
+  @override
   Track? get current => queue.isEmpty ? null : queue[index];
   @override
   bool playing = false;
@@ -98,6 +105,26 @@ class FakeEngine extends MusicEngine {
   @override
   Future<void> toggle() async {
     playing = !playing;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> play() async {
+    playing = true;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> pause() async {
+    playing = false;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> stop() => pause();
+  @override
+  Future<void> skipToIndex(int value) async {
+    if (value >= 0 && value < queue.length) index = value;
     notifyListeners();
   }
 

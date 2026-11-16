@@ -29,6 +29,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -43,6 +44,8 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     implementation("com.spotify.android:auth:5.0.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.0")

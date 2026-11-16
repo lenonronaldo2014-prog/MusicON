@@ -1,8 +1,11 @@
 package com.musicon.musicon
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,6 +17,8 @@ import com.spotify.sdk.android.auth.PKCEInformation
 import com.spotify.sdk.android.auth.app.SpotifyNativeAuthUtil
 
 class MainActivity : AudioServiceActivity() {
+    private var dailyWordChannel: MethodChannel? = null
+    private var notificationPermissionResult: MethodChannel.Result? = null
     private var spotifyResult: MethodChannel.Result? = null
     private var spotifyState: String? = null
     private var spotifyViaApp = false
@@ -21,6 +26,10 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("daily_word", false)) {
+            dailyWordChannel?.invokeMethod("openDailyWord", null)
+        }
         val uri = intent.data ?: return
         if (uri.scheme != "musicon" || uri.host != "spotify" || uri.path != "/callback") return
         if (spotifyResult == null || uri.getQueryParameter("state") != spotifyState) return
@@ -61,15 +70,7 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        if (!flutterEngine.plugins.has(NewPipeBridge::class.java)) {
-            flutterEngine.plugins.add(NewPipeBridge())
-        }
-        if (!flutterEngine.plugins.has(DeviceAudioPlugin::class.java)) {
-            flutterEngine.plugins.add(DeviceAudioPlugin())
-        }
-        if (!flutterEngine.plugins.has(SpotifyHttpPlugin::class.java)) {
-            flutterEngine.plugins.add(SpotifyHttpPlugin())
-        }
+        configureDailyWord(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "musicon/app")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -179,5 +180,63 @@ class MainActivity : AudioServiceActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+    private fun configureDailyWord(flutterEngine: FlutterEngine) {
+        dailyWordChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.musicon.musicon/daily_word").apply {
+            setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "getState" -> {
+                            val state = DailyWordNotifications.state(this@MainActivity).toMutableMap()
+                            state["openedFromNotification"] = intent.getBooleanExtra("daily_word", false)
+                            intent.removeExtra("daily_word")
+                            DailyWordNotifications.schedule(this@MainActivity)
+                            result.success(state)
+                        }
+                        "setEnabled" -> {
+                            DailyWordNotifications.setEnabled(this@MainActivity, call.argument<Boolean>("enabled") == true)
+                            result.success(DailyWordNotifications.state(this@MainActivity))
+                        }
+                        "requestPermission" -> {
+                            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                if (notificationPermissionResult != null) result.error("busy", "Há uma solicitação em andamento.", null)
+                                else {
+                                    notificationPermissionResult = result
+                                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 8001)
+                                }
+                            } else {
+                                DailyWordNotifications.schedule(this@MainActivity)
+                                result.success(DailyWordNotifications.state(this@MainActivity))
+                            }
+                        }
+                        "openSettings" -> {
+                            val settings = if (Build.VERSION.SDK_INT >= 26) Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                                .putExtra(Settings.EXTRA_CHANNEL_ID, DailyWordNotifications.CHANNEL_ID)
+                            else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                            startActivity(settings)
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (_: Exception) {
+                    result.error("daily_word", "Não foi possível atualizar a palavra do dia.", null)
+                }
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 8001) {
+            val result = notificationPermissionResult
+            notificationPermissionResult = null
+            try {
+                DailyWordNotifications.schedule(this)
+                result?.success(DailyWordNotifications.state(this))
+            } catch (_: Exception) {
+                result?.error("daily_word", "Não foi possível agendar o aviso.", null)
+            }
+        }
     }
 }

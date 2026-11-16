@@ -1,11 +1,22 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import 'audio_engine.dart';
 import 'models.dart';
 
 class JustAudioEngine extends MusicEngine {
   final AudioPlayer _player = AudioPlayer();
+  final ChangeNotifier _playbackChanges = ChangeNotifier();
+  @override
+  Listenable get playbackChanges => _playbackChanges;
+  @override
+  List<Track> get queueTracks => List.unmodifiable(_queue);
+  @override
+  int? get queueIndex => _player.currentIndex;
+  @override
+  MusicProcessingState get processingState =>
+      MusicProcessingState.values.byName(_player.processingState.name);
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   List<Track> _queue = [];
   String? _error;
@@ -16,7 +27,11 @@ class JustAudioEngine extends MusicEngine {
   JustAudioEngine({this.onlineSourceFactory}) {
     _subscriptions.addAll([
       _player.playerStateStream.listen((_) => _changed()),
-      _player.positionStream.listen((_) => _changed()),
+      _player.positionStream.listen((_) => _changed(playback: false)),
+      _player.playbackEventStream.listen(
+        (_) => _changed(),
+        onError: (Object _) => _fail(),
+      ),
       _player.durationStream.listen((_) => _changed()),
       _player.currentIndexStream.listen((_) => _changed()),
       _player.shuffleModeEnabledStream.listen((_) => _changed()),
@@ -25,8 +40,11 @@ class JustAudioEngine extends MusicEngine {
       _player.errorStream.listen((_) => _fail()),
     ]);
   }
-  void _changed() {
-    if (!_disposed) notifyListeners();
+  void _changed({bool playback = true}) {
+    if (!_disposed) {
+      notifyListeners();
+      if (playback) _playbackChanges.notifyListeners();
+    }
   }
 
   void _fail() {
@@ -144,14 +162,28 @@ class JustAudioEngine extends MusicEngine {
   @override
   Future<void> toggle() => _guard(() async {
     if (playing) {
-      await _player.pause();
+      await pause();
       return;
     }
+    await play();
+  });
+  @override
+  Future<void> play() => _guard(() async {
     _error = null;
     if (_player.processingState == ProcessingState.completed) {
       await _player.seek(Duration.zero);
     }
     unawaited(_guard(_player.play));
+  });
+  @override
+  Future<void> pause() => _guard(_player.pause);
+  @override
+  Future<void> stop() => _guard(_player.stop);
+  @override
+  Future<void> skipToIndex(int index) => _guard(() async {
+    if (index >= 0 && index < _queue.length) {
+      await _player.seek(Duration.zero, index: index);
+    }
   });
   @override
   Future<void> seek(Duration position) => _guard(() => _player.seek(position));
@@ -190,6 +222,7 @@ class JustAudioEngine extends MusicEngine {
       );
     } finally {
       await _player.dispose();
+      _playbackChanges.dispose();
     }
   }
 
